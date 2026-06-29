@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>칼로리 관리 - 대시보드</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: #f5f7fa; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 30px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .title { font-size: 32px; font-weight: 700; color: #667eea; margin-bottom: 10px; }
+        .subtitle { color: #666; font-size: 14px; }
+        .date-info { background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; margin-top: 15px; font-weight: 600; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow-x: auto; }
+        .tab-btn { padding: 10px 20px; border: none; background: #e0e0e0; color: #333; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s; white-space: nowrap; }
+        .tab-btn.active { background: #667eea; color: white; }
+        .tab-btn:hover { background: #667eea; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .input-form { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .meal-input { padding: 15px; background: #f9f9f9; border-radius: 8px; margin-bottom: 15px; }
+        .meal-input-label { font-weight: 600; color: #333; margin-bottom: 10px; display: block; font-size: 15px; }
+        .meal-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        input[type="number"] { width: 100%; padding: 10px 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; transition: border-color 0.2s; }
+        input[type="number"]:focus { outline: none; border-color: #667eea; background-color: #f8f9ff; }
+        button.save-btn { background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 30px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 16px; transition: transform 0.2s; margin-top: 10px; }
+        button.save-btn:hover { transform: translateY(-2px); }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-top: 20px; }
+        .stat-card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 4px solid #667eea; }
+        .stat-label { font-size: 13px; color: #999; font-weight: 600; text-transform: uppercase; margin-bottom: 8px; }
+        .stat-value { font-size: 28px; font-weight: 700; color: #333; margin-bottom: 5px; }
+        .stat-unit { font-size: 16px; color: #999; margin-left: 4px; }
+        .stat-progress { background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden; margin-top: 10px; }
+        .stat-progress-bar { height: 100%; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); }
+        .stat-note { font-size: 12px; color: #999; margin-top: 8px; }
+        .chart-container { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 20px; }
+        .history-table { width: 100%; background: white; border-collapse: collapse; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 20px; }
+        .history-table th { background: #667eea; color: white; padding: 15px; text-align: center; font-weight: 600; }
+        .history-table td { padding: 15px; text-align: center; border-bottom: 1px solid #e0e0e0; }
+        .history-table tr:hover { background: #f5f7fa; }
+        @media (max-width: 768px) { .title { font-size: 24px; } .stats-grid { grid-template-columns: 1fr; } .meal-inputs { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title">🎯 칼로리 & 단백질 관리</div>
+            <div class="subtitle">일일 기록 | 주간 분석 | 월간 통계</div>
+            <div class="date-info">📅 2026년 06월 29일 (오늘)</div>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('today')">📅 오늘</button>
+            <button class="tab-btn" onclick="switchTab('weekly')">📊 주간</button>
+            <button class="tab-btn" onclick="switchTab('monthly')">📈 월간</button>
+        </div>
+        
+        <!-- 오늘 탭 -->
+        <div id="today" class="tab-content active">
+            <div class="input-form">
+                <h3 style="margin-bottom: 20px; color: #333;">📝 오늘의 섭취량 기록</h3>
+                <div id="mealsContainer"></div>
+                <button class="save-btn" onclick="saveDailyRecord()">💾 저장하기</button>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">칼로리</div>
+                    <div><span class="stat-value" id="todayCalorie">0</span><span class="stat-unit">kcal</span></div>
+                    <div class="stat-progress"><div class="stat-progress-bar" id="calProgressBar" style="width: 0%"></div></div>
+                    <div class="stat-note">목표: 1,800 kcal</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">단백질</div>
+                    <div><span class="stat-value" id="todayProtein">0</span><span class="stat-unit">g</span></div>
+                    <div class="stat-progress"><div class="stat-progress-bar" id="proteinProgressBar" style="width: 0%"></div></div>
+                    <div class="stat-note">목표: 120 g</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">달성도</div>
+                    <div><span class="stat-value" id="achievementRate">0</span><span class="stat-unit">%</span></div>
+                    <div style="font-size: 12px; color: #999; margin-top: 12px;" id="achievementText">기록을 입력해주세요</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">칼로리 차이</div>
+                    <div><span class="stat-value" id="diffCal" style="font-size: 24px;">0</span><span class="stat-unit">kcal</span></div>
+                    <div class="stat-note" id="diffCalNote"></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">단백질 차이</div>
+                    <div><span class="stat-value" id="diffProtein" style="font-size: 24px;">0</span><span class="stat-unit">g</span></div>
+                    <div class="stat-note" id="diffProteinNote"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 주간 탭 -->
+        <div id="weekly" class="tab-content">
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px;">
+                <h3 style="margin-bottom: 20px;">📊 주간 기록</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead><tr style="background: #667eea; color: white;"><th style="padding: 15px;">월</th><th style="padding: 15px;">화</th><th style="padding: 15px;">수</th><th style="padding: 15px;">목</th><th style="padding: 15px;">금</th><th style="padding: 15px;">토</th><th style="padding: 15px;">일</th></tr></thead>
+                    <tbody id="weeklyTable"><tr><td colspan="7" style="text-align: center; padding: 20px;">기록 중...</td></tr></tbody>
+                </table>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="weeklyChart" height="80"></canvas>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">주간 평균 칼로리</div>
+                    <div><span class="stat-value" id="weekAvgCal">0</span><span class="stat-unit">kcal</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">주간 평균 단백질</div>
+                    <div><span class="stat-value" id="weekAvgProtein">0</span><span class="stat-unit">g</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">주간 달성도</div>
+                    <div><span class="stat-value" id="weekAchievement">0</span><span class="stat-unit">%</span></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 월간 탭 -->
+        <div id="monthly" class="tab-content">
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px;">
+                <h3 style="margin-bottom: 20px;">📈 월간 기록 - 일별</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead><tr style="background: #667eea; color: white;"><th style="padding: 15px;">날짜</th><th style="padding: 15px;">칼로리</th><th style="padding: 15px;">단백질</th><th style="padding: 15px;">달성도</th></tr></thead>
+                    <tbody id="monthlyDailyTable"><tr><td colspan="4" style="text-align: center; padding: 20px;">기록이 없습니다</td></tr></tbody>
+                </table>
+            </div>
+            
+            <div class="chart-container">
+                <h4 style="margin-bottom: 15px;">칼로리 추이</h4>
+                <canvas id="monthlyChart" height="80"></canvas>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">월간 평균 칼로리</div>
+                    <div><span class="stat-value" id="monthAvgCal">0</span><span class="stat-unit">kcal</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">월간 평균 단백질</div>
+                    <div><span class="stat-value" id="monthAvgProtein">0</span><span class="stat-unit">g</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">월간 달성도</div>
+                    <div><span class="stat-value" id="monthAchievement">0</span><span class="stat-unit">%</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">기록된 일수</div>
+                    <div><span class="stat-value" id="recordedDays">0</span><span class="stat-unit">일</span></div>
+                </div>
+            </div>
+            
+            <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 20px;">
+                <h3 style="margin-bottom: 20px;">📊 주별 통계</h3>
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>주차</th>
+                            <th>평균 칼로리</th>
+                            <th>평균 단백질</th>
+                            <th>달성도</th>
+                        </tr>
+                    </thead>
+                    <tbody id="weeklyStatsTable">
+                        <tr><td colspan="4" style="text-align: center; padding: 20px;">기록이 없습니다</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const meals = ['아침', '간식1', '점심', '간식2', '저녁'];
+        const targetCal = 1800;
+        const targetProtein = 120;
+        const today = "2026-06-29";
+        let mealsData = {"아침": {"cal": 329, "protein": 12}, "간식1": {"cal": 280, "protein": 23.5}, "점심": {"cal": 239, "protein": 21}, "간식2": {"cal": 98, "protein": 1.5}, "저녁": {"cal": 0, "protein": 0}};
+        let records = JSON.parse(localStorage.getItem('calorieRecords')) || {};
+        let weeklyChart = null;
+        let monthlyChart = null;
+        
+        function initializeMealsForm() {
+            const container = document.getElementById('mealsContainer');
+            container.innerHTML = '';
+            meals.forEach(meal => {
+                const div = document.createElement('div');
+                div.className = 'meal-input';
+                const data = mealsData[meal] || {};
+                const calValue = data.cal || '';
+                const proteinValue = data.protein || '';
+                div.innerHTML = `
+                    <label class="meal-input-label">${meal}</label>
+                    <div class="meal-inputs">
+                        <input type="number" placeholder="칼로리" class="cal-input" value="${calValue}" data-meal="${meal}" min="0">
+                        <input type="number" placeholder="단백질(g)" class="protein-input" value="${proteinValue}" data-meal="${meal}" min="0" step="0.1">
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+            document.querySelectorAll('.cal-input, .protein-input').forEach(input => {
+                input.addEventListener('input', updateTodayStats);
+            });
+            updateTodayStats();
+        }
+        
+        function updateTodayStats() {
+            let totalCal = 0, totalProtein = 0;
+            document.querySelectorAll('.cal-input').forEach(input => totalCal += parseFloat(input.value) || 0);
+            document.querySelectorAll('.protein-input').forEach(input => totalProtein += parseFloat(input.value) || 0);
+            document.getElementById('todayCalorie').textContent = Math.round(totalCal);
+            document.getElementById('todayProtein').textContent = totalProtein.toFixed(1);
+            const calProgress = Math.min((totalCal / targetCal) * 100, 100);
+            const proteinProgress = Math.min((totalProtein / targetProtein) * 100, 100);
+            document.getElementById('calProgressBar').style.width = calProgress + '%';
+            document.getElementById('proteinProgressBar').style.width = proteinProgress + '%';
+            const avgProgress = Math.round((calProgress + proteinProgress) / 2);
+            document.getElementById('achievementRate').textContent = avgProgress;
+            const diffCalVal = totalCal - targetCal;
+            const diffProteinVal = totalProtein - targetProtein;
+            document.getElementById('diffCal').textContent = (diffCalVal >= 0 ? '+' : '') + Math.round(diffCalVal);
+            document.getElementById('diffProtein').textContent = (diffProteinVal >= 0 ? '+' : '') + diffProteinVal.toFixed(1);
+            document.getElementById('diffCalNote').textContent = diffCalVal >= 0 ? '초과' : '부족';
+            document.getElementById('diffProteinNote').textContent = diffProteinVal >= 0 ? '초과' : '부족';
+            if (avgProgress >= 100) document.getElementById('achievementText').textContent = '🎉 목표 달성!';
+            else if (avgProgress >= 80) document.getElementById('achievementText').textContent = '👍 거의 다 왔어요!';
+            else if (avgProgress >= 50) document.getElementById('achievementText').textContent = '⏳ 계속 입력해주세요';
+            else document.getElementById('achievementText').textContent = '📝 기록을 입력해주세요';
+        }
+        
+        function saveDailyRecord() {
+            let totalCal = 0, totalProtein = 0;
+            document.querySelectorAll('.cal-input').forEach(input => totalCal += parseFloat(input.value) || 0);
+            document.querySelectorAll('.protein-input').forEach(input => totalProtein += parseFloat(input.value) || 0);
+            records[today] = { cal: totalCal, protein: totalProtein, date: today };
+            localStorage.setItem('calorieRecords', JSON.stringify(records));
+            alert('저장되었습니다! ✅');
+            updateMonthlyStats();
+            updateWeeklyStats();
+        }
+        
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+            if (tabName === 'monthly') updateMonthlyStats();
+            if (tabName === 'weekly') updateWeeklyStats();
+        }
+        
+        function updateWeeklyStats() {
+            let weekData = [];
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(date.getDate() - i);
+                const dateStr = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+                weekData.push({ date: dateStr, dayName: ['일', '월', '화', '수', '목', '금', '토'][date.getDay()] });
+            }
+            let totalCal = 0, totalProtein = 0;
+            const tbody = document.getElementById('weeklyTable');
+            tbody.innerHTML = '<tr>' + weekData.map(w => {
+                const data = records[w.date] || { cal: 0, protein: 0 };
+                totalCal += data.cal;
+                totalProtein += data.protein;
+                return `<td><div style="font-weight: 600; margin-bottom: 5px;">${w.dayName}</div><div style="font-size: 12px;">${Math.round(data.cal)} kcal</div><div style="font-size: 12px;">${data.protein.toFixed(1)}g</div></td>`;
+            }).join('') + '</tr>';
+            document.getElementById('weekAvgCal').textContent = Math.round(totalCal / 7);
+            document.getElementById('weekAvgProtein').textContent = (totalProtein / 7).toFixed(1);
+            const avgCalAchievement = Math.round(((totalCal / 7) / targetCal) * 100);
+            const avgProteinAchievement = Math.round(((totalProtein / 7) / targetProtein) * 100);
+            document.getElementById('weekAchievement').textContent = Math.round((avgCalAchievement + avgProteinAchievement) / 2);
+            
+            drawWeeklyChart(weekData);
+        }
+        
+        function drawWeeklyChart(weekData) {
+            const ctx = document.getElementById('weeklyChart').getContext('2d');
+            const data = weekData.map(w => records[w.date]?.cal || 0);
+            const labels = weekData.map(w => w.dayName);
+            
+            if (weeklyChart) weeklyChart.destroy();
+            weeklyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '칼로리',
+                        data: data,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        pointRadius: 6,
+                        pointBackgroundColor: '#667eea',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2
+                    }, {
+                        label: '목표 (1800)',
+                        data: Array(7).fill(targetCal),
+                        borderColor: '#f59e0b',
+                        borderDash: [5, 5],
+                        fill: false,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: { mode: 'index', intersect: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            min: 1200,
+                            max: 2200
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateMonthlyStats() {
+            const sortedDates = Object.keys(records).sort();
+            const tbody = document.getElementById('monthlyDailyTable');
+            
+            if (sortedDates.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 30px;">기록이 없습니다</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = sortedDates.reverse().slice(0, 31).map(date => {
+                const data = records[date];
+                const achievement = Math.round(((data.cal / targetCal + data.protein / targetProtein) / 2) * 100);
+                return `<tr><td><strong>${date}</strong></td><td>${Math.round(data.cal)}</td><td>${data.protein.toFixed(1)}</td><td>${achievement}%</td></tr>`;
+            }).join('');
+            
+            let totalCal = 0, totalProtein = 0;
+            sortedDates.forEach(date => {
+                totalCal += records[date].cal;
+                totalProtein += records[date].protein;
+            });
+            
+            const avgCal = Math.round(totalCal / sortedDates.length);
+            const avgProtein = (totalProtein / sortedDates.length).toFixed(1);
+            
+            document.getElementById('monthAvgCal').textContent = avgCal;
+            document.getElementById('monthAvgProtein').textContent = avgProtein;
+            document.getElementById('recordedDays').textContent = sortedDates.length;
+            
+            const avgCalAchievement = Math.round((avgCal / targetCal) * 100);
+            const avgProteinAchievement = Math.round((avgProtein / targetProtein) * 100);
+            document.getElementById('monthAchievement').textContent = Math.round((avgCalAchievement + avgProteinAchievement) / 2);
+            
+            drawMonthlyChart(sortedDates);
+            updateWeeklyStatsTable(sortedDates);
+        }
+        
+        function drawMonthlyChart(sortedDates) {
+            const ctx = document.getElementById('monthlyChart').getContext('2d');
+            const data = sortedDates.map(date => records[date].cal);
+            const labels = sortedDates.map(date => date.slice(8));
+            
+            if (monthlyChart) monthlyChart.destroy();
+            monthlyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '칼로리',
+                        data: data,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        pointRadius: 4
+                    }, {
+                        label: '목표 (1800)',
+                        data: Array(labels.length).fill(targetCal),
+                        borderColor: '#f59e0b',
+                        borderDash: [5, 5],
+                        fill: false,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { legend: { position: 'top' } },
+                    scales: { y: { beginAtZero: false, min: 1200, max: 2200 } }
+                }
+            });
+        }
+        
+        function updateWeeklyStatsTable(sortedDates) {
+            const weeks = {};
+            sortedDates.forEach(date => {
+                const dateObj = new Date(date);
+                const week = Math.ceil(dateObj.getDate() / 7);
+                if (!weeks[week]) weeks[week] = { cal: 0, protein: 0, count: 0 };
+                weeks[week].cal += records[date].cal;
+                weeks[week].protein += records[date].protein;
+                weeks[week].count++;
+            });
+            
+            const tbody = document.getElementById('weeklyStatsTable');
+            tbody.innerHTML = Object.keys(weeks).map(week => {
+                const w = weeks[week];
+                const avgCal = Math.round(w.cal / w.count);
+                const avgProtein = (w.protein / w.count).toFixed(1);
+                const achievement = Math.round(((avgCal / targetCal + avgProtein / targetProtein) / 2) * 100);
+                return `<tr><td><strong>${week}주차</strong></td><td>${avgCal}</td><td>${avgProtein}</td><td>${achievement}%</td></tr>`;
+            }).join('');
+        }
+        
+        initializeMealsForm();
+        updateWeeklyStats();
+        updateMonthlyStats();
+    </script>
+</body>
+</html>
