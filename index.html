@@ -4,18 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>💪🏼</title>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #667eea; min-height: 100vh; padding: 10px; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif; background: #667eea; min-height: 100vh; padding: 10px; }
         .container { max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; padding: 15px; }
         .header { text-align: center; margin-bottom: 15px; }
         .title { font-size: 32px; }
-        .date-nav { display: flex; gap: 8px; margin-bottom: 15px; align-items: center; justify-content: center; flex-wrap: nowrap; overflow-x: auto; }
+        .date-nav { display: flex; gap: 8px; margin-bottom: 15px; align-items: center; justify-content: center; }
         .btn { padding: 8px 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap; }
         .btn-nav { background: #f0f0f0; color: #667eea; }
         .btn-today { background: #667eea; color: white; }
-        .current-date { font-weight: 600; color: #333; font-size: 13px; }
-        .calendar-input { display: none; }
+        .current-date { font-weight: 600; color: #333; font-size: 14px; letter-spacing: 0.5px; }
+        input[type="date"] { padding: 8px 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; }
         .btn-add { background: #e0e7ff; color: #667eea; border: 2px dashed #667eea; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: 600; margin-bottom: 15px; width: 100%; font-size: 13px; }
         .meals { margin-bottom: 15px; }
         .meal { background: #f9f9f9; padding: 12px; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid #667eea; }
@@ -29,7 +31,13 @@
         .input-group { display: flex; flex-direction: column; }
         .label { font-size: 10px; color: #667eea; font-weight: 700; margin-bottom: 2px; }
         input[type="number"], input[type="text"] { padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 12px; font-weight: 600; width: 100%; }
-        .add-item-btn { background: #f0f0f0; border: 1px dashed #667eea; color: #667eea; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; margin-top: 4px; width: 100%; }
+        .notes { margin-top: 8px; border-top: 1px solid #e0e0e0; padding-top: 8px; }
+        .note-item { background: white; padding: 6px; border-radius: 6px; margin-bottom: 6px; display: flex; gap: 6px; align-items: center; }
+        .note-text { flex: 1; font-size: 12px; }
+        .note-del { background: #e0e0e0; border: none; width: 20px; height: 20px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+        .note-input { display: flex; gap: 6px; }
+        .note-input input { flex: 1; padding: 6px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 11px; }
+        .note-input button { background: #667eea; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; }
         .stats { background: #667eea; color: white; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 15px; }
         .stat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .stat { background: rgba(255,255,255,0.2); padding: 8px; border-radius: 6px; }
@@ -49,9 +57,7 @@
         <div class="date-nav">
             <button class="btn btn-nav" onclick="prevDay()">← 이전</button>
             <button class="btn btn-today" onclick="todayDay()">오늘</button>
-            <div class="current-date" id="dateShow"></div>
-            <input type="date" id="calendarInput" class="calendar-input" onchange="changeDate()">
-            <button class="btn btn-nav" onclick="document.getElementById('calendarInput').click()">📅</button>
+            <input type="date" id="dateInput" onchange="changeDate()">
             <button class="btn btn-nav" onclick="nextDay()">다음 →</button>
         </div>
 
@@ -83,25 +89,24 @@
         let data = {};
 
         function load() {
-            // 6/29 초기 데이터
-            if (!localStorage.getItem('calories_2026-06-29')) {
-                localStorage.setItem('calories_2026-06-29', JSON.stringify({
+            if (!localStorage.getItem('cal_2026-06-29')) {
+                localStorage.setItem('cal_2026-06-29', JSON.stringify({
                     meals: [
-                        { id: 1, name: '☀️ 아침', fixed: true, items: [{id: 1, cal: 329, pro: 12}] },
-                        { id: 4, name: '🥤 간식1', fixed: false, items: [{id: 1, cal: 280, pro: 23.5}] },
-                        { id: 2, name: '🌤️ 점심', fixed: true, items: [{id: 1, cal: 239, pro: 21}] },
-                        { id: 5, name: '🍪 간식2', fixed: false, items: [{id: 1, cal: 98, pro: 1.5}] },
-                        { id: 3, name: '🌙 저녁', fixed: true, items: [{id: 1, cal: 772, pro: 37.3}] }
+                        { id: 1, name: '☀️ 아침', fixed: true, cal: 329, pro: 12, notes: [] },
+                        { id: 4, name: '🥤 간식1', fixed: false, cal: 280, pro: 23.5, notes: [] },
+                        { id: 2, name: '🌤️ 점심', fixed: true, cal: 239, pro: 21, notes: [] },
+                        { id: 5, name: '🍪 간식2', fixed: false, cal: 98, pro: 1.5, notes: [] },
+                        { id: 3, name: '🌙 저녁', fixed: true, cal: 772, pro: 37.3, notes: [] }
                     ]
                 }));
             }
 
-            const stored = localStorage.getItem('calories_' + currentDate);
+            const stored = localStorage.getItem('cal_' + currentDate);
             data = stored ? JSON.parse(stored) : {
                 meals: [
-                    { id: 1, name: '☀️ 아침', fixed: true, items: [{id: 1, cal: '', pro: ''}] },
-                    { id: 2, name: '🌤️ 점심', fixed: true, items: [{id: 1, cal: '', pro: ''}] },
-                    { id: 3, name: '🌙 저녁', fixed: true, items: [{id: 1, cal: '', pro: ''}] }
+                    { id: 1, name: '☀️ 아침', fixed: true, cal: '', pro: '', notes: [] },
+                    { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
+                    { id: 3, name: '🌙 저녁', fixed: true, cal: '', pro: '', notes: [] }
                 ]
             };
             updateDate();
@@ -111,8 +116,7 @@
         function updateDate() {
             const d = new Date(currentDate);
             const days = ['일','월','화','수','목','금','토'];
-            document.getElementById('dateShow').textContent = currentDate + ' (' + days[d.getDay()] + ')';
-            document.getElementById('calendarInput').value = currentDate;
+            document.getElementById('dateInput').value = currentDate;
         }
 
         function render() {
@@ -129,18 +133,28 @@
                 }
                 html += '</div></div>';
                 
-                meal.items.forEach(item => {
-                    html += '<div class="inputs">';
-                    html += '<div class="input-group"><label class="label">칼로리</label>';
-                    html += '<input type="number" id="cal_' + meal.id + '_' + item.id + '" value="' + (item.cal || '') + '" placeholder="0" oninput="calc()">';
-                    html += '</div>';
-                    html += '<div class="input-group"><label class="label">단백질(g)</label>';
-                    html += '<input type="number" id="pro_' + meal.id + '_' + item.id + '" value="' + (item.pro || '') + '" placeholder="0" step="0.1" oninput="calc()">';
-                    html += '</div>';
+                html += '<div class="inputs">';
+                html += '<div class="input-group"><label class="label">칼로리</label>';
+                html += '<input type="number" id="cal_' + meal.id + '" value="' + (meal.cal || '') + '" placeholder="0" oninput="calc()">';
+                html += '</div>';
+                html += '<div class="input-group"><label class="label">단백질(g)</label>';
+                html += '<input type="number" id="pro_' + meal.id + '" value="' + (meal.pro || '') + '" placeholder="0" step="0.1" oninput="calc()">';
+                html += '</div>';
+                html += '</div>';
+                
+                html += '<div class="notes">';
+                meal.notes.forEach((note, nidx) => {
+                    html += '<div class="note-item">';
+                    html += '<div class="note-text">' + note + '</div>';
+                    html += '<button class="note-del" onclick="delNote(' + meal.id + ',' + nidx + ')">✕</button>';
                     html += '</div>';
                 });
+                html += '<div class="note-input">';
+                html += '<input type="text" id="noteInput_' + meal.id + '" placeholder="음식 상세" onkeypress="if(event.key==\'Enter\') addNote(' + meal.id + ')">';
+                html += '<button onclick="addNote(' + meal.id + ')">추가</button>';
+                html += '</div>';
+                html += '</div>';
                 
-                html += '<button class="add-item-btn" onclick="addItem(' + meal.id + ')">+ 항목 추가</button>';
                 html += '</div>';
             });
             document.getElementById('meals').innerHTML = html;
@@ -150,22 +164,30 @@
         function calc() {
             let c = 0, p = 0;
             data.meals.forEach(meal => {
-                meal.items.forEach(item => {
-                    const calEl = document.getElementById('cal_' + meal.id + '_' + item.id);
-                    const proEl = document.getElementById('pro_' + meal.id + '_' + item.id);
-                    if (calEl) c += parseFloat(calEl.value) || 0;
-                    if (proEl) p += parseFloat(proEl.value) || 0;
-                });
+                c += parseFloat(document.getElementById('cal_' + meal.id).value) || 0;
+                p += parseFloat(document.getElementById('pro_' + meal.id).value) || 0;
             });
             document.getElementById('totalCal').textContent = Math.round(c);
             document.getElementById('totalPro').textContent = p.toFixed(1);
         }
 
-        function addItem(mealId) {
+        function addNote(mealId) {
+            const input = document.getElementById('noteInput_' + mealId);
+            const text = input.value.trim();
+            if (text) {
+                const meal = data.meals.find(m => m.id === mealId);
+                if (meal) {
+                    meal.notes.push(text);
+                    input.value = '';
+                    render();
+                }
+            }
+        }
+
+        function delNote(mealId, idx) {
             const meal = data.meals.find(m => m.id === mealId);
             if (meal) {
-                const maxId = Math.max(0, ...meal.items.map(i => i.id));
-                meal.items.push({id: maxId + 1, cal: '', pro: ''});
+                meal.notes.splice(idx, 1);
                 render();
             }
         }
@@ -174,7 +196,7 @@
             const emojis = ['🥤','🍪','🍰','🧁','🍩','☕','🥛','🍫'];
             const emoji = emojis[Math.floor(Math.random() * emojis.length)];
             const id = Math.max(0, ...data.meals.map(m => m.id)) + 1;
-            data.meals.push({id: id, name: emoji + ' 간식', fixed: false, items: [{id: 1, cal: '', pro: ''}]});
+            data.meals.push({id: id, name: emoji + ' 간식', fixed: false, cal: '', pro: '', notes: []});
             render();
         }
 
@@ -217,33 +239,25 @@
         }
 
         function changeDate() {
-            currentDate = document.getElementById('calendarInput').value;
+            currentDate = document.getElementById('dateInput').value;
             load();
         }
 
         function save() {
             data.meals.forEach(meal => {
-                meal.items.forEach(item => {
-                    const calEl = document.getElementById('cal_' + meal.id + '_' + item.id);
-                    const proEl = document.getElementById('pro_' + meal.id + '_' + item.id);
-                    if (calEl) item.cal = parseFloat(calEl.value) || 0;
-                    if (proEl) item.pro = parseFloat(proEl.value) || 0;
-                });
+                meal.cal = parseFloat(document.getElementById('cal_' + meal.id).value) || 0;
+                meal.pro = parseFloat(document.getElementById('pro_' + meal.id).value) || 0;
                 const nameEl = document.getElementById('name_' + meal.id);
                 if (nameEl && !meal.fixed) meal.name = nameEl.value;
             });
-            localStorage.setItem('calories_' + currentDate, JSON.stringify(data));
+            localStorage.setItem('cal_' + currentDate, JSON.stringify(data));
             alert('저장됨! ✅');
         }
 
         function clearAll() {
             data.meals.forEach(meal => {
-                meal.items.forEach(item => {
-                    const calEl = document.getElementById('cal_' + meal.id + '_' + item.id);
-                    const proEl = document.getElementById('pro_' + meal.id + '_' + item.id);
-                    if (calEl) calEl.value = '';
-                    if (proEl) proEl.value = '';
-                });
+                document.getElementById('cal_' + meal.id).value = '';
+                document.getElementById('pro_' + meal.id).value = '';
             });
             calc();
         }
