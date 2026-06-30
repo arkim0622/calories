@@ -166,7 +166,6 @@
         }
 
         function load() {
-            initData();
             const stored = localStorage.getItem('cal_' + currentDate);
             if (stored) {
                 data = JSON.parse(stored);
