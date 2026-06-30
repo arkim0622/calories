@@ -135,30 +135,33 @@
         let data = {};
 
         function initData() {
-            // 6/30 데이터 없을 때만 초기값 설정
-            if (!localStorage.getItem('cal_2026-06-30')) {
-                localStorage.setItem('cal_2026-06-30', JSON.stringify({
-                    exercise: false,
-                    meals: [
-                        { id: 1, name: '☀️ 아침', fixed: true, cal: 295, pro: 17, notes: ['토마토 블루베리 스무디 (200ml)', '감동란 2개'] },
-                        { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
-                        { id: 3, name: '🌙 저녁', fixed: true, cal: '', pro: '', notes: [] }
-                    ]
-                }));
-            }
+            // 이미 초기화됨 (이후로는 실행 안 함)
+            if (localStorage.getItem('_app_initialized')) return;
+            
+            // 6/30 데이터 (처음 한 번만)
+            localStorage.setItem('cal_2026-06-30', JSON.stringify({
+                exercise: false,
+                meals: [
+                    { id: 1, name: '☀️ 아침', fixed: true, cal: 295, pro: 17, notes: ['토마토 블루베리 스무디 (200ml)', '감동란 2개'] },
+                    { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
+                    { id: 3, name: '🌙 저녁', fixed: true, cal: '', pro: '', notes: [] }
+                ]
+            }));
 
-            if (!localStorage.getItem('cal_2026-06-29')) {
-                localStorage.setItem('cal_2026-06-29', JSON.stringify({
-                    exercise: false,
-                    meals: [
-                        { id: 1, name: '☀️ 아침', fixed: true, cal: 329, pro: 12, notes: [] },
-                        { id: 4, name: '🥤 간식', fixed: false, cal: 280, pro: 23.5, notes: [] },
-                        { id: 2, name: '🌤️ 점심', fixed: true, cal: 239, pro: 21, notes: [] },
-                        { id: 5, name: '🍪 간식2', fixed: false, cal: 98, pro: 1.5, notes: [] },
-                        { id: 3, name: '🌙 저녁', fixed: true, cal: 772, pro: 37.3, notes: [] }
-                    ]
-                }));
-            }
+            // 6/29 데이터 (처음 한 번만)
+            localStorage.setItem('cal_2026-06-29', JSON.stringify({
+                exercise: false,
+                meals: [
+                    { id: 1, name: '☀️ 아침', fixed: true, cal: 329, pro: 12, notes: [] },
+                    { id: 4, name: '🥤 간식', fixed: false, cal: 280, pro: 23.5, notes: [] },
+                    { id: 2, name: '🌤️ 점심', fixed: true, cal: 239, pro: 21, notes: [] },
+                    { id: 5, name: '🍪 간식2', fixed: false, cal: 98, pro: 1.5, notes: [] },
+                    { id: 3, name: '🌙 저녁', fixed: true, cal: 772, pro: 37.3, notes: [] }
+                ]
+            }));
+            
+            // 초기화 완료 플래그
+            localStorage.setItem('_app_initialized', 'true');
         }
 
         function load() {
