@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>💪🏼 칼로리 관리</title>
+    <title>💪🏼</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #667eea; min-height: 100vh; padding: 10px; }
         .container { max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; padding: 15px; }
         .header { text-align: center; margin-bottom: 15px; }
-        .title { font-size: 26px; font-weight: 700; color: #667eea; }
-        .date-nav { display: flex; gap: 8px; margin-bottom: 15px; align-items: center; justify-content: center; flex-wrap: nowrap; overflow-x: auto; padding: 0 5px; }
+        .title { font-size: 32px; }
+        .date-nav { display: flex; gap: 8px; margin-bottom: 15px; align-items: center; justify-content: center; flex-wrap: nowrap; overflow-x: auto; }
         .btn { padding: 8px 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap; }
         .btn-nav { background: #f0f0f0; color: #667eea; }
         .btn-today { background: #667eea; color: white; }
@@ -20,18 +20,18 @@
         .meals { margin-bottom: 15px; }
         .meal { background: #f9f9f9; padding: 12px; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid #667eea; }
         .meal-header { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
-        .meal-emoji { font-size: 16px; min-width: 20px; }
         .meal-name { flex: 1; }
         .meal-name input { width: 100%; padding: 6px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 12px; font-weight: 600; }
         .meal-controls { display: flex; gap: 4px; }
         .meal-btn { background: #e0e0e0; border: none; width: 24px; height: 24px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; }
         .meal-btn:active { background: #d0d0d0; }
-        .inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
         .input-group { display: flex; flex-direction: column; }
         .label { font-size: 10px; color: #667eea; font-weight: 700; margin-bottom: 2px; }
-        input[type="number"] { padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 12px; font-weight: 600; }
+        input[type="number"], input[type="text"] { padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 12px; font-weight: 600; width: 100%; }
+        .add-item-btn { background: #f0f0f0; border: 1px dashed #667eea; color: #667eea; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; margin-top: 4px; width: 100%; }
         .stats { background: #667eea; color: white; padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 15px; }
-        .stat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        .stat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .stat { background: rgba(255,255,255,0.2); padding: 8px; border-radius: 6px; }
         .stat-label { font-size: 10px; opacity: 0.9; }
         .stat-value { font-size: 18px; font-weight: 700; margin-top: 2px; }
@@ -43,202 +43,212 @@
 <body>
     <div class="container">
         <div class="header">
-            <div class="title">💪🏼 칼로리 관리</div>
+            <div class="title">💪🏼</div>
         </div>
 
         <div class="date-nav">
             <button class="btn btn-nav" onclick="prevDay()">← 이전</button>
             <button class="btn btn-today" onclick="todayDay()">오늘</button>
             <div class="current-date" id="dateShow"></div>
-            <input type="date" id="calendarInput" class="calendar-input">
-            <button class="btn btn-nav" onclick="openCalendar()">📅</button>
+            <input type="date" id="calendarInput" class="calendar-input" onchange="changeDate()">
+            <button class="btn btn-nav" onclick="document.getElementById('calendarInput').click()">📅</button>
             <button class="btn btn-nav" onclick="nextDay()">다음 →</button>
         </div>
 
-        <button class="btn-add" onclick="addItem()">+ 항목 추가</button>
+        <button class="btn-add" onclick="addMeal()">+ 항목 추가</button>
 
-        <div class="meals" id="meals"></div>
+        <div id="meals"></div>
 
         <div class="stats">
             <div class="stat-row">
                 <div class="stat">
                     <div class="stat-label">칼로리</div>
-                    <div class="stat-value"><span id="cal">0</span> / 1800</div>
+                    <div class="stat-value"><span id="totalCal">0</span> / 1800</div>
                 </div>
                 <div class="stat">
                     <div class="stat-label">단백질</div>
-                    <div class="stat-value"><span id="protein">0</span> / 120</div>
+                    <div class="stat-value"><span id="totalPro">0</span> / 120</div>
                 </div>
             </div>
-            <div style="font-size: 15px; font-weight: 700;">달성도: <span id="achieve">0</span>%</div>
         </div>
 
         <div class="buttons">
             <button class="btn-save" onclick="save()">💾 저장</button>
-            <button class="btn-save btn-reset" onclick="clear()">🔄 초기화</button>
+            <button class="btn-save btn-reset" onclick="clearAll()">🔄 초기화</button>
         </div>
     </div>
 
     <script>
         let currentDate = new Date().toISOString().split('T')[0];
-        let meals = [];
+        let data = {};
 
-        function loadMeals() {
-            meals = JSON.parse(localStorage.getItem('meals_' + currentDate)) || [
-                { id: 1, emoji: '☀️', name: '아침', fixed: true },
-                { id: 2, emoji: '🌤️', name: '점심', fixed: true },
-                { id: 3, emoji: '🌙', name: '저녁', fixed: true }
-            ];
-            updateDateDisplay();
+        function load() {
+            // 6/29 초기 데이터
+            if (!localStorage.getItem('calories_2026-06-29')) {
+                localStorage.setItem('calories_2026-06-29', JSON.stringify({
+                    meals: [
+                        { id: 1, name: '☀️ 아침', fixed: true, items: [{id: 1, cal: 329, pro: 12}] },
+                        { id: 4, name: '🥤 간식1', fixed: false, items: [{id: 1, cal: 280, pro: 23.5}] },
+                        { id: 2, name: '🌤️ 점심', fixed: true, items: [{id: 1, cal: 239, pro: 21}] },
+                        { id: 5, name: '🍪 간식2', fixed: false, items: [{id: 1, cal: 98, pro: 1.5}] },
+                        { id: 3, name: '🌙 저녁', fixed: true, items: [{id: 1, cal: 772, pro: 37.3}] }
+                    ]
+                }));
+            }
+
+            const stored = localStorage.getItem('calories_' + currentDate);
+            data = stored ? JSON.parse(stored) : {
+                meals: [
+                    { id: 1, name: '☀️ 아침', fixed: true, items: [{id: 1, cal: '', pro: ''}] },
+                    { id: 2, name: '🌤️ 점심', fixed: true, items: [{id: 1, cal: '', pro: ''}] },
+                    { id: 3, name: '🌙 저녁', fixed: true, items: [{id: 1, cal: '', pro: ''}] }
+                ]
+            };
+            updateDate();
             render();
         }
 
-        function updateDateDisplay() {
+        function updateDate() {
             const d = new Date(currentDate);
-            const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-            document.getElementById('dateShow').textContent = currentDate + ' (' + dayNames[d.getDay()] + ')';
+            const days = ['일','월','화','수','목','금','토'];
+            document.getElementById('dateShow').textContent = currentDate + ' (' + days[d.getDay()] + ')';
             document.getElementById('calendarInput').value = currentDate;
         }
 
         function render() {
             let html = '';
-            meals.forEach((m, idx) => {
-                const data = JSON.parse(localStorage.getItem('meal_' + currentDate + '_' + m.id)) || { cal: 0, pro: 0 };
+            data.meals.forEach((meal, idx) => {
+                html += '<div class="meal">';
+                html += '<div class="meal-header">';
+                html += '<div class="meal-name"><input type="text" value="' + meal.name + '" id="name_' + meal.id + '" ' + (meal.fixed ? 'readonly' : '') + '></div>';
+                html += '<div class="meal-controls">';
+                if (!meal.fixed) {
+                    html += '<button class="meal-btn" onclick="moveUp(' + idx + ')">↑</button>';
+                    html += '<button class="meal-btn" onclick="moveDown(' + idx + ')">↓</button>';
+                    html += '<button class="meal-btn" onclick="delMeal(' + meal.id + ')">✕</button>';
+                }
+                html += '</div></div>';
                 
-                html += `
-                    <div class="meal">
-                        <div class="meal-header">
-                            <div class="meal-emoji">${m.emoji}</div>
-                            <div class="meal-name">
-                                <input type="text" value="${m.name}" id="name_${m.id}" ${m.fixed ? 'readonly' : ''}>
-                            </div>
-                            <div class="meal-controls">
-                                ${!m.fixed ? `<button class="meal-btn" onclick="moveUp(${idx})">↑</button>` : ''}
-                                ${!m.fixed ? `<button class="meal-btn" onclick="moveDown(${idx})">↓</button>` : ''}
-                                ${!m.fixed ? `<button class="meal-btn" onclick="delItem(${m.id})">✕</button>` : ''}
-                            </div>
-                        </div>
-                        <div class="inputs">
-                            <div class="input-group">
-                                <label class="label">칼로리</label>
-                                <input type="number" id="cal_${m.id}" value="${data.cal || ''}" placeholder="0" oninput="calc()">
-                            </div>
-                            <div class="input-group">
-                                <label class="label">단백질(g)</label>
-                                <input type="number" id="pro_${m.id}" value="${data.pro || ''}" placeholder="0" step="0.1" oninput="calc()">
-                            </div>
-                        </div>
-                    </div>
-                `;
+                meal.items.forEach(item => {
+                    html += '<div class="inputs">';
+                    html += '<div class="input-group"><label class="label">칼로리</label>';
+                    html += '<input type="number" id="cal_' + meal.id + '_' + item.id + '" value="' + (item.cal || '') + '" placeholder="0" oninput="calc()">';
+                    html += '</div>';
+                    html += '<div class="input-group"><label class="label">단백질(g)</label>';
+                    html += '<input type="number" id="pro_' + meal.id + '_' + item.id + '" value="' + (item.pro || '') + '" placeholder="0" step="0.1" oninput="calc()">';
+                    html += '</div>';
+                    html += '</div>';
+                });
+                
+                html += '<button class="add-item-btn" onclick="addItem(' + meal.id + ')">+ 항목 추가</button>';
+                html += '</div>';
             });
-            
             document.getElementById('meals').innerHTML = html;
             calc();
         }
 
         function calc() {
             let c = 0, p = 0;
-            meals.forEach(m => {
-                const calEl = document.getElementById('cal_' + m.id);
-                const proEl = document.getElementById('pro_' + m.id);
-                if (calEl) c += parseFloat(calEl.value) || 0;
-                if (proEl) p += parseFloat(proEl.value) || 0;
+            data.meals.forEach(meal => {
+                meal.items.forEach(item => {
+                    const calEl = document.getElementById('cal_' + meal.id + '_' + item.id);
+                    const proEl = document.getElementById('pro_' + meal.id + '_' + item.id);
+                    if (calEl) c += parseFloat(calEl.value) || 0;
+                    if (proEl) p += parseFloat(proEl.value) || 0;
+                });
             });
-            document.getElementById('cal').textContent = Math.round(c);
-            document.getElementById('protein').textContent = p.toFixed(1);
-            const pct = Math.round((c/1800 + p/120) / 2 * 100);
-            document.getElementById('achieve').textContent = pct;
+            document.getElementById('totalCal').textContent = Math.round(c);
+            document.getElementById('totalPro').textContent = p.toFixed(1);
+        }
+
+        function addItem(mealId) {
+            const meal = data.meals.find(m => m.id === mealId);
+            if (meal) {
+                const maxId = Math.max(0, ...meal.items.map(i => i.id));
+                meal.items.push({id: maxId + 1, cal: '', pro: ''});
+                render();
+            }
+        }
+
+        function addMeal() {
+            const emojis = ['🥤','🍪','🍰','🧁','🍩','☕','🥛','🍫'];
+            const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+            const id = Math.max(0, ...data.meals.map(m => m.id)) + 1;
+            data.meals.push({id: id, name: emoji + ' 간식', fixed: false, items: [{id: 1, cal: '', pro: ''}]});
+            render();
+        }
+
+        function delMeal(id) {
+            data.meals = data.meals.filter(m => m.id !== id);
+            render();
+        }
+
+        function moveUp(idx) {
+            if (idx > 0 && !data.meals[idx].fixed) {
+                [data.meals[idx], data.meals[idx-1]] = [data.meals[idx-1], data.meals[idx]];
+                render();
+            }
+        }
+
+        function moveDown(idx) {
+            if (idx < data.meals.length - 1 && !data.meals[idx].fixed) {
+                [data.meals[idx], data.meals[idx+1]] = [data.meals[idx+1], data.meals[idx]];
+                render();
+            }
         }
 
         function prevDay() {
             const d = new Date(currentDate);
             d.setDate(d.getDate() - 1);
             currentDate = d.toISOString().split('T')[0];
-            loadMeals();
+            load();
         }
 
         function nextDay() {
             const d = new Date(currentDate);
             d.setDate(d.getDate() + 1);
             currentDate = d.toISOString().split('T')[0];
-            loadMeals();
+            load();
         }
 
         function todayDay() {
             currentDate = new Date().toISOString().split('T')[0];
-            loadMeals();
+            load();
         }
 
-        function openCalendar() {
-            document.getElementById('calendarInput').click();
-        }
-
-        document.getElementById('calendarInput').addEventListener('change', function() {
-            currentDate = this.value;
-            loadMeals();
-        });
-
-        function addItem() {
-            const emojis = ['🥤', '🍪', '🍰', '🧁', '🍩', '☕', '🥛', '🍫'];
-            const emoji = emojis[Math.floor(Math.random() * emojis.length)];
-            const id = Math.max(0, ...meals.map(m => m.id)) + 1;
-            meals.push({ id, emoji, name: '간식', fixed: false });
-            localStorage.setItem('meals_' + currentDate, JSON.stringify(meals));
-            render();
-        }
-
-        function delItem(id) {
-            meals = meals.filter(m => m.id !== id);
-            localStorage.setItem('meals_' + currentDate, JSON.stringify(meals));
-            render();
-        }
-
-        function moveUp(idx) {
-            if (idx > 0 && !meals[idx].fixed) {
-                [meals[idx], meals[idx - 1]] = [meals[idx - 1], meals[idx]];
-                localStorage.setItem('meals_' + currentDate, JSON.stringify(meals));
-                render();
-            }
-        }
-
-        function moveDown(idx) {
-            if (idx < meals.length - 1 && !meals[idx].fixed) {
-                [meals[idx], meals[idx + 1]] = [meals[idx + 1], meals[idx]];
-                localStorage.setItem('meals_' + currentDate, JSON.stringify(meals));
-                render();
-            }
+        function changeDate() {
+            currentDate = document.getElementById('calendarInput').value;
+            load();
         }
 
         function save() {
-            meals.forEach(m => {
-                const calEl = document.getElementById('cal_' + m.id);
-                const proEl = document.getElementById('pro_' + m.id);
-                const nameEl = document.getElementById('name_' + m.id);
-                
-                if (calEl && proEl && nameEl) {
-                    const cal = parseFloat(calEl.value) || 0;
-                    const pro = parseFloat(proEl.value) || 0;
-                    const name = nameEl.value;
-                    
-                    localStorage.setItem('meal_' + currentDate + '_' + m.id, JSON.stringify({ cal, pro }));
-                    m.name = name;
-                }
+            data.meals.forEach(meal => {
+                meal.items.forEach(item => {
+                    const calEl = document.getElementById('cal_' + meal.id + '_' + item.id);
+                    const proEl = document.getElementById('pro_' + meal.id + '_' + item.id);
+                    if (calEl) item.cal = parseFloat(calEl.value) || 0;
+                    if (proEl) item.pro = parseFloat(proEl.value) || 0;
+                });
+                const nameEl = document.getElementById('name_' + meal.id);
+                if (nameEl && !meal.fixed) meal.name = nameEl.value;
             });
-            localStorage.setItem('meals_' + currentDate, JSON.stringify(meals));
+            localStorage.setItem('calories_' + currentDate, JSON.stringify(data));
             alert('저장됨! ✅');
         }
 
-        function clear() {
-            meals.forEach(m => {
-                const calEl = document.getElementById('cal_' + m.id);
-                const proEl = document.getElementById('pro_' + m.id);
-                if (calEl) calEl.value = '';
-                if (proEl) proEl.value = '';
+        function clearAll() {
+            data.meals.forEach(meal => {
+                meal.items.forEach(item => {
+                    const calEl = document.getElementById('cal_' + meal.id + '_' + item.id);
+                    const proEl = document.getElementById('pro_' + meal.id + '_' + item.id);
+                    if (calEl) calEl.value = '';
+                    if (proEl) proEl.value = '';
+                });
             });
             calc();
         }
 
-        loadMeals();
+        load();
     </script>
 </body>
 </html>
