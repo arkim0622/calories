@@ -10,8 +10,13 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif; background: #667eea; min-height: 100vh; padding: 10px; }
         .container { max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; padding: 15px; }
-        .header { text-align: center; margin-bottom: 15px; }
-        .title { font-size: 32px; }
+        .header { text-align: center; margin-bottom: 10px; }
+        .title { font-size: 32px; margin-bottom: 10px; }
+        .tabs { display: flex; gap: 6px; margin-bottom: 15px; background: #f0f0f0; padding: 4px; border-radius: 8px; }
+        .tab-btn { flex: 1; padding: 8px; border: none; background: transparent; color: #999; font-weight: 600; border-radius: 6px; cursor: pointer; font-size: 12px; }
+        .tab-btn.active { background: white; color: #667eea; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
         .date-nav { display: flex; gap: 8px; margin-bottom: 15px; align-items: center; justify-content: center; }
         .btn { padding: 8px 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap; }
         .btn-nav { background: #f0f0f0; color: #667eea; }
@@ -26,15 +31,14 @@
         .meal-name input { width: 100%; padding: 6px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 12px; font-weight: 600; }
         .meal-controls { display: flex; gap: 4px; }
         .meal-btn { background: #e0e0e0; border: none; width: 24px; height: 24px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; }
-        .meal-btn:active { background: #d0d0d0; }
         .inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
         .input-group { display: flex; flex-direction: column; }
         .label { font-size: 10px; color: #667eea; font-weight: 700; margin-bottom: 2px; }
         input[type="number"], input[type="text"] { padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 12px; font-weight: 600; width: 100%; }
         .notes { margin-top: 8px; border-top: 1px solid #e0e0e0; padding-top: 8px; }
-        .note-item { background: white; padding: 6px; border-radius: 6px; margin-bottom: 6px; display: flex; gap: 6px; align-items: center; }
+        .note-item { background: white; padding: 6px; border-radius: 6px; margin-bottom: 6px; display: flex; gap: 4px; align-items: center; }
         .note-text { flex: 1; font-size: 12px; }
-        .note-del { background: #e0e0e0; border: none; width: 20px; height: 20px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+        .note-del { background: #e0e0e0; border: none; width: 40px; height: 24px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; }
         .note-input { display: flex; gap: 6px; }
         .note-input input { flex: 1; padding: 6px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 11px; }
         .note-input button { background: #667eea; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; }
@@ -46,6 +50,9 @@
         .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .btn-save { background: #667eea; color: white; padding: 12px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-size: 13px; }
         .btn-reset { background: #f0f0f0; color: #333; }
+        .table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+        .table th { background: #667eea; color: white; padding: 8px; text-align: center; font-weight: 600; }
+        .table td { padding: 8px; text-align: center; border-bottom: 1px solid #e0e0e0; }
     </style>
 </head>
 <body>
@@ -54,33 +61,61 @@
             <div class="title">💪🏼</div>
         </div>
 
-        <div class="date-nav">
-            <button class="btn btn-nav" onclick="prevDay()">← 이전</button>
-            <button class="btn btn-today" onclick="todayDay()">오늘</button>
-            <input type="date" id="dateInput" onchange="changeDate()">
-            <button class="btn btn-nav" onclick="nextDay()">다음 →</button>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('today')">📅 오늘</button>
+            <button class="tab-btn" onclick="switchTab('weekly')">📊 주간</button>
+            <button class="tab-btn" onclick="switchTab('monthly')">📈 월간</button>
         </div>
 
-        <div class="stats">
-            <div class="stat-row">
-                <div class="stat">
-                    <div class="stat-label">칼로리</div>
-                    <div class="stat-value"><span id="totalCal">0</span> / 1800</div>
+        <!-- 오늘 탭 -->
+        <div id="today" class="tab-content active">
+            <div class="date-nav">
+                <button class="btn btn-nav" onclick="prevDay()">← 이전</button>
+                <button class="btn btn-today" onclick="todayDay()">오늘</button>
+                <input type="date" id="dateInput" onchange="changeDate()">
+                <button class="btn btn-nav" onclick="nextDay()">다음 →</button>
+            </div>
+
+            <div class="stats">
+                <div class="stat-row">
+                    <div class="stat">
+                        <div class="stat-label">칼로리</div>
+                        <div class="stat-value"><span id="totalCal">0</span> / 1800</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">단백질</div>
+                        <div class="stat-value"><span id="totalPro">0</span> / 120</div>
+                    </div>
                 </div>
-                <div class="stat">
-                    <div class="stat-label">단백질</div>
-                    <div class="stat-value"><span id="totalPro">0</span> / 120</div>
-                </div>
+            </div>
+
+            <button class="btn-add" onclick="addMeal()">+ 항목 추가</button>
+            <div id="meals"></div>
+
+            <div class="buttons">
+                <button class="btn-save" onclick="save()">💾 저장</button>
+                <button class="btn-save btn-reset" onclick="clearAll()">🔄 초기화</button>
             </div>
         </div>
 
-        <button class="btn-add" onclick="addMeal()">+ 항목 추가</button>
+        <!-- 주간 탭 -->
+        <div id="weekly" class="tab-content">
+            <table class="table">
+                <thead>
+                    <tr><th>날짜</th><th>칼로리</th><th>단백질</th></tr>
+                </thead>
+                <tbody id="weeklyTable"></tbody>
+            </table>
+        </div>
 
-        <div id="meals"></div>
-
-        <div class="buttons">
-            <button class="btn-save" onclick="save()">💾 저장</button>
-            <button class="btn-save btn-reset" onclick="clearAll()">🔄 초기화</button>
+        <!-- 월간 탭 -->
+        <div id="monthly" class="tab-content">
+            <table class="table">
+                <thead>
+                    <tr><th>날짜</th><th>칼로리</th><th>단백질</th></tr>
+                </thead>
+                <tbody id="monthlyTable"></tbody>
+            </table>
         </div>
     </div>
 
@@ -89,8 +124,24 @@
         let data = {};
 
         function load() {
-            if (!localStorage.getItem('cal_2026-06-29')) {
-                localStorage.setItem('cal_2026-06-29', JSON.stringify({
+            // 이전 데이터 확인 (calories_ 키)
+            let stored = localStorage.getItem('calories_' + currentDate);
+            if (stored) {
+                data = JSON.parse(stored);
+                localStorage.setItem('cal_' + currentDate, stored); // 새 키로 저장
+                localStorage.removeItem('calories_' + currentDate); // 이전 키 삭제
+            } else {
+                stored = localStorage.getItem('cal_' + currentDate);
+                data = stored ? JSON.parse(stored) : getDefaultData();
+            }
+
+            updateDate();
+            render();
+        }
+
+        function getDefaultData() {
+            if (currentDate === '2026-06-29') {
+                return {
                     meals: [
                         { id: 1, name: '☀️ 아침', fixed: true, cal: 329, pro: 12, notes: [] },
                         { id: 4, name: '🥤 간식1', fixed: false, cal: 280, pro: 23.5, notes: [] },
@@ -98,19 +149,15 @@
                         { id: 5, name: '🍪 간식2', fixed: false, cal: 98, pro: 1.5, notes: [] },
                         { id: 3, name: '🌙 저녁', fixed: true, cal: 772, pro: 37.3, notes: [] }
                     ]
-                }));
+                };
             }
-
-            const stored = localStorage.getItem('cal_' + currentDate);
-            data = stored ? JSON.parse(stored) : {
+            return {
                 meals: [
                     { id: 1, name: '☀️ 아침', fixed: true, cal: '', pro: '', notes: [] },
                     { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
                     { id: 3, name: '🌙 저녁', fixed: true, cal: '', pro: '', notes: [] }
                 ]
             };
-            updateDate();
-            render();
         }
 
         function updateDate() {
@@ -264,6 +311,8 @@
             });
             localStorage.setItem('cal_' + currentDate, JSON.stringify(data));
             alert('저장됨! ✅');
+            loadWeekly();
+            loadMonthly();
         }
 
         function clearAll() {
@@ -272,6 +321,55 @@
                 document.getElementById('pro_' + meal.id).value = '';
             });
             calc();
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tab).classList.add('active');
+            event.target.classList.add('active');
+            if (tab === 'weekly') loadWeekly();
+            if (tab === 'monthly') loadMonthly();
+        }
+
+        function loadWeekly() {
+            const d = new Date(currentDate);
+            const dayOfWeek = d.getDay();
+            const diff = d.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+            const monday = new Date(d.setDate(diff));
+            
+            let html = '';
+            const days = ['월','화','수','목','금','토','일'];
+            for (let i = 0; i < 7; i++) {
+                const date = new Date(monday);
+                date.setDate(date.getDate() + i);
+                const dateStr = date.toISOString().split('T')[0];
+                const stored = JSON.parse(localStorage.getItem('cal_' + dateStr) || '{"meals":[]}');
+                let c = 0, p = 0;
+                if (stored.meals) {
+                    stored.meals.forEach(m => { c += m.cal || 0; p += m.pro || 0; });
+                }
+                html += '<tr><td>' + days[i] + '</td><td>' + Math.round(c) + '</td><td>' + p.toFixed(1) + '</td></tr>';
+            }
+            document.getElementById('weeklyTable').innerHTML = html;
+        }
+
+        function loadMonthly() {
+            let html = '';
+            for (let i = 1; i <= 31; i++) {
+                const date = new Date(currentDate.slice(0,7) + '-' + String(i).padStart(2,'0'));
+                if (date.getMonth() !== new Date(currentDate).getMonth()) break;
+                const dateStr = date.toISOString().split('T')[0];
+                const stored = JSON.parse(localStorage.getItem('cal_' + dateStr) || '{"meals":[]}');
+                let c = 0, p = 0;
+                if (stored.meals) {
+                    stored.meals.forEach(m => { c += m.cal || 0; p += m.pro || 0; });
+                }
+                if (c > 0 || p > 0) {
+                    html += '<tr><td>' + dateStr + '</td><td>' + Math.round(c) + '</td><td>' + p.toFixed(1) + '</td></tr>';
+                }
+            }
+            document.getElementById('monthlyTable').innerHTML = html || '<tr><td colspan="3">기록 없음</td></tr>';
         }
 
         load();
