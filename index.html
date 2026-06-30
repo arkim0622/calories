@@ -6,6 +6,7 @@
     <title>💪🏼</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
     <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif; background: #667eea; min-height: 100vh; padding: 10px; }
@@ -115,6 +116,7 @@
                 </thead>
                 <tbody id="weeklyTable"></tbody>
             </table>
+            <canvas id="weeklyChart" style="margin-top: 20px; max-height: 300px;"></canvas>
         </div>
 
         <!-- 월간 탭 -->
@@ -133,15 +135,17 @@
         let data = {};
 
         function initData() {
-            // 6/30 원래 데이터
-            localStorage.setItem('cal_2026-06-30', JSON.stringify({
-                exercise: false,
-                meals: [
-                    { id: 1, name: '☀️ 아침', fixed: true, cal: 295, pro: 17, notes: ['토마토 블루베리 스무디 (200ml)', '감동란 2개'] },
-                    { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
-                    { id: 3, name: '🌙 저녁', fixed: true, cal: '', pro: '', notes: [] }
-                ]
-            }));
+            // 6/30 데이터 없을 때만 초기값 설정
+            if (!localStorage.getItem('cal_2026-06-30')) {
+                localStorage.setItem('cal_2026-06-30', JSON.stringify({
+                    exercise: false,
+                    meals: [
+                        { id: 1, name: '☀️ 아침', fixed: true, cal: 295, pro: 17, notes: ['토마토 블루베리 스무디 (200ml)', '감동란 2개'] },
+                        { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
+                        { id: 3, name: '🌙 저녁', fixed: true, cal: '', pro: '', notes: [] }
+                    ]
+                }));
+            }
 
             if (!localStorage.getItem('cal_2026-06-29')) {
                 localStorage.setItem('cal_2026-06-29', JSON.stringify({
@@ -388,6 +392,8 @@
             
             let html = '';
             const days = ['월','화','수','목','금','토','일'];
+            const calData = [], proData = [];
+            
             for (let i = 0; i < 7; i++) {
                 const date = new Date(monday);
                 date.setDate(date.getDate() + i);
@@ -397,10 +403,106 @@
                 if (stored.meals) {
                     stored.meals.forEach(m => { c += m.cal || 0; p += m.pro || 0; });
                 }
-                const exMark = stored.exercise ? '💪' : '';
+                calData.push(c);
+                proData.push(p);
+                const exMark = stored.exercise ? '🏋🏻‍♀️' : '';
                 html += '<tr><td>' + days[i] + ' ' + exMark + '</td><td>' + Math.round(c) + '</td><td>' + p.toFixed(1) + '</td></tr>';
             }
             document.getElementById('weeklyTable').innerHTML = html;
+            
+            // Chart.js 그래프
+            const ctx = document.getElementById('weeklyChart').getContext('2d');
+            if (window.weeklyChartInstance) {
+                window.weeklyChartInstance.destroy();
+            }
+            
+            window.weeklyChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: days,
+                    datasets: [
+                        {
+                            label: '칼로리',
+                            data: calData,
+                            borderColor: '#f87171',
+                            backgroundColor: 'rgba(248, 113, 113, 0.1)',
+                            borderWidth: 2,
+                            fill: false,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#f87171',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            yAxisID: 'y',
+                            tension: 0.4,
+                            datalabels: { display: true }
+                        },
+                        {
+                            label: '단백질',
+                            data: proData,
+                            borderColor: '#60a5fa',
+                            backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                            borderWidth: 2,
+                            fill: false,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#60a5fa',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            yAxisID: 'y1',
+                            tension: 0.4
+                        },
+                        {
+                            label: '칼로리 목표',
+                            data: [1800, 1800, 1800, 1800, 1800, 1800, 1800],
+                            borderColor: '#f87171',
+                            borderDash: [5, 5],
+                            borderWidth: 1,
+                            fill: false,
+                            pointRadius: 0,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: '단백질 목표',
+                            data: [120, 120, 120, 120, 120, 120, 120],
+                            borderColor: '#60a5fa',
+                            borderDash: [5, 5],
+                            borderWidth: 1,
+                            fill: false,
+                            pointRadius: 0,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: true, position: 'top' },
+                        datalabels: {
+                            display: true,
+                            font: { size: 10, weight: 'bold' },
+                            color: '#333'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: '칼로리' },
+                            ticks: { color: '#f87171' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: { display: true, text: '단백질(g)' },
+                            ticks: { color: '#60a5fa' },
+                            grid: { drawOnChartArea: false }
+                        }
+                    }
+                }
+            });
         }
 
         function loadMonthly() {
