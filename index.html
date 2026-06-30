@@ -47,8 +47,8 @@
         .stat { background: rgba(255,255,255,0.2); padding: 8px; border-radius: 6px; }
         .stat-label { font-size: 10px; opacity: 0.9; }
         .stat-value { font-size: 18px; font-weight: 700; margin-top: 2px; }
-        .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .btn-save { background: #667eea; color: white; padding: 12px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-size: 13px; }
+        .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .btn-save { background: #667eea; color: white; padding: 12px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-size: 13px; width: 100%; }
         .btn-reset { background: #f0f0f0; color: #333; }
         .table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
         .table th { background: #667eea; color: white; padding: 8px; text-align: center; font-weight: 600; }
@@ -99,7 +99,7 @@
             <div id="meals"></div>
 
             <div class="buttons">
-                <button class="btn-save" onclick="save()">💾 저장</button>
+                <button class="btn-save" onclick="saveMeals()">💾 저장</button>
                 <button class="btn-save btn-reset" onclick="clearAll()">🔄 초기화</button>
             </div>
         </div>
@@ -129,8 +129,8 @@
         let currentDate = new Date().toISOString().split('T')[0];
         let data = {};
 
-        function load() {
-            // 6/29가 localStorage에 없을 때만 초기값 설정 (덮어쓰지 않음!)
+        function initData() {
+            // 6/29 초기값 (없을 때만 생성)
             if (!localStorage.getItem('cal_2026-06-29')) {
                 localStorage.setItem('cal_2026-06-29', JSON.stringify({
                     exercise: false,
@@ -144,34 +144,37 @@
                 }));
             }
 
-            let stored = localStorage.getItem('cal_' + currentDate);
-            data = stored ? JSON.parse(stored) : getDefaultData();
-
-            updateDate();
-            render();
-        }
-
-        function getDefaultData() {
-            if (currentDate === '2026-06-29') {
-                return {
+            // 6/30 초기값 (없을 때만 생성)
+            if (!localStorage.getItem('cal_2026-06-30')) {
+                localStorage.setItem('cal_2026-06-30', JSON.stringify({
                     exercise: false,
                     meals: [
-                        { id: 1, name: '☀️ 아침', fixed: true, cal: 329, pro: 12, notes: [] },
-                        { id: 4, name: '🥤 간식', fixed: false, cal: 280, pro: 23.5, notes: [] },
-                        { id: 2, name: '🌤️ 점심', fixed: true, cal: 239, pro: 21, notes: [] },
-                        { id: 5, name: '🍪 간식2', fixed: false, cal: 98, pro: 1.5, notes: [] },
-                        { id: 3, name: '🌙 저녁', fixed: true, cal: 772, pro: 37.3, notes: [] }
+                        { id: 1, name: '☀️ 아침', fixed: true, cal: 295, pro: 17, notes: ['토마토 블루베리 스무디 (200ml)', '감동란 2개'] },
+                        { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
+                        { id: 3, name: '🌙 저녁', fixed: true, cal: '', pro: '', notes: [] }
+                    ]
+                }));
+            }
+        }
+
+        function load() {
+            initData();
+            
+            const stored = localStorage.getItem('cal_' + currentDate);
+            if (stored) {
+                data = JSON.parse(stored);
+            } else {
+                data = {
+                    exercise: false,
+                    meals: [
+                        { id: 1, name: '☀️ 아침', fixed: true, cal: '', pro: '', notes: [] },
+                        { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
+                        { id: 3, name: '🌙 저녁', fixed: true, cal: '', pro: '', notes: [] }
                     ]
                 };
             }
-            return {
-                exercise: false,
-                meals: [
-                    { id: 1, name: '☀️ 아침', fixed: true, cal: '', pro: '', notes: [] },
-                    { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
-                    { id: 3, name: '🌙 저녁', fixed: true, cal: '', pro: '', notes: [] }
-                ]
-            };
+            updateDate();
+            render();
         }
 
         function updateDate() {
@@ -234,10 +237,6 @@
             document.getElementById('totalPro').textContent = p.toFixed(1);
         }
 
-        function updateExercise() {
-            data.exercise = document.getElementById('exerciseCheck').checked;
-        }
-
         function addNote(mealId) {
             const input = document.getElementById('noteInput_' + mealId);
             const text = input.value.trim();
@@ -297,6 +296,32 @@
             }
         }
 
+        function updateExercise() {
+            data.exercise = document.getElementById('exerciseCheck').checked;
+        }
+
+        function saveMeals() {
+            data.exercise = document.getElementById('exerciseCheck').checked;
+            data.meals.forEach(meal => {
+                meal.cal = parseFloat(document.getElementById('cal_' + meal.id).value) || 0;
+                meal.pro = parseFloat(document.getElementById('pro_' + meal.id).value) || 0;
+                const nameEl = document.getElementById('name_' + meal.id);
+                if (nameEl && !meal.fixed) meal.name = nameEl.value;
+            });
+            localStorage.setItem('cal_' + currentDate, JSON.stringify(data));
+            alert('저장됨! ✅');
+            loadWeekly();
+            loadMonthly();
+        }
+
+        function clearAll() {
+            data.meals.forEach(meal => {
+                document.getElementById('cal_' + meal.id).value = '';
+                document.getElementById('pro_' + meal.id).value = '';
+            });
+            calc();
+        }
+
         function prevDay() {
             const d = new Date(currentDate);
             d.setDate(d.getDate() - 1);
@@ -319,28 +344,6 @@
         function changeDate() {
             currentDate = document.getElementById('dateInput').value;
             load();
-        }
-
-        function save() {
-            data.exercise = document.getElementById('exerciseCheck').checked;
-            data.meals.forEach(meal => {
-                meal.cal = parseFloat(document.getElementById('cal_' + meal.id).value) || 0;
-                meal.pro = parseFloat(document.getElementById('pro_' + meal.id).value) || 0;
-                const nameEl = document.getElementById('name_' + meal.id);
-                if (nameEl && !meal.fixed) meal.name = nameEl.value;
-            });
-            localStorage.setItem('cal_' + currentDate, JSON.stringify(data));
-            alert('저장됨! ✅');
-            loadWeekly();
-            loadMonthly();
-        }
-
-        function clearAll() {
-            data.meals.forEach(meal => {
-                document.getElementById('cal_' + meal.id).value = '';
-                document.getElementById('pro_' + meal.id).value = '';
-            });
-            calc();
         }
 
         function switchTab(tab) {
