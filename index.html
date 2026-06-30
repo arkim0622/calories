@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
     <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif; background: #667eea; min-height: 100vh; padding: 10px; }
@@ -395,12 +396,17 @@
             
             let html = '';
             const days = ['월','화','수','목','금','토','일'];
-            const calData = [], proData = [];
+            const calData = [], proData = [], dateLabels = [];
             
             for (let i = 0; i < 7; i++) {
                 const date = new Date(monday);
                 date.setDate(date.getDate() + i);
                 const dateStr = date.toISOString().split('T')[0];
+                const month = date.getMonth() + 1;
+                const day = date.getDate();
+                const dayOfWeek = days[date.getDay() === 0 ? 6 : date.getDay() - 1];
+                dateLabels.push(`${month}/${day} ${dayOfWeek}`);
+                
                 const stored = JSON.parse(localStorage.getItem('cal_' + dateStr) || '{"exercise":false,"meals":[]}');
                 let c = 0, p = 0;
                 if (stored.meals) {
@@ -409,7 +415,7 @@
                 calData.push(c);
                 proData.push(p);
                 const exMark = stored.exercise ? '🏋🏻‍♀️' : '';
-                html += '<tr><td>' + days[i] + ' ' + exMark + '</td><td>' + Math.round(c) + '</td><td>' + p.toFixed(1) + '</td></tr>';
+                html += '<tr><td>' + dayOfWeek + ' ' + exMark + '</td><td>' + Math.round(c) + '</td><td>' + p.toFixed(1) + '</td></tr>';
             }
             document.getElementById('weeklyTable').innerHTML = html;
             
@@ -419,10 +425,12 @@
                 window.weeklyChartInstance.destroy();
             }
             
+            Chart.register(ChartDataLabels);
+            
             window.weeklyChartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: days,
+                    labels: dateLabels,
                     datasets: [
                         {
                             label: '칼로리',
@@ -437,7 +445,7 @@
                             pointBorderWidth: 2,
                             yAxisID: 'y',
                             tension: 0.4,
-                            datalabels: { display: true }
+                            datalabels: { color: '#f87171' }
                         },
                         {
                             label: '단백질',
@@ -451,27 +459,30 @@
                             pointBorderColor: '#fff',
                             pointBorderWidth: 2,
                             yAxisID: 'y1',
-                            tension: 0.4
+                            tension: 0.4,
+                            datalabels: { color: '#60a5fa' }
                         },
                         {
-                            label: '칼로리 목표',
+                            label: '목표: 1800kcal',
                             data: [1800, 1800, 1800, 1800, 1800, 1800, 1800],
                             borderColor: '#f87171',
-                            borderDash: [5, 5],
-                            borderWidth: 1,
+                            borderDash: [8, 4],
+                            borderWidth: 2,
                             fill: false,
                             pointRadius: 0,
-                            yAxisID: 'y'
+                            yAxisID: 'y',
+                            datalabels: { display: false }
                         },
                         {
-                            label: '단백질 목표',
+                            label: '목표: 120g',
                             data: [120, 120, 120, 120, 120, 120, 120],
                             borderColor: '#60a5fa',
-                            borderDash: [5, 5],
-                            borderWidth: 1,
+                            borderDash: [8, 4],
+                            borderWidth: 2,
                             fill: false,
                             pointRadius: 0,
-                            yAxisID: 'y1'
+                            yAxisID: 'y1',
+                            datalabels: { display: false }
                         }
                     ]
                 },
@@ -480,11 +491,35 @@
                     maintainAspectRatio: true,
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
-                        legend: { display: true, position: 'top' },
+                        legend: { display: false },
                         datalabels: {
                             display: true,
-                            font: { size: 10, weight: 'bold' },
-                            color: '#333'
+                            font: { size: 11, weight: 'bold' },
+                            color: '#333',
+                            align: 'top',
+                            offset: 5
+                        },
+                        afterDraw: {
+                            id: 'afterDraw',
+                            afterDraw(chart) {
+                                const { ctx, chartArea, scales } = chart;
+                                const yScale = scales.y;
+                                const y1Scale = scales.y1;
+                                const rightEdge = chartArea.right + 15;
+                                
+                                // 칼로리 목표값 (우측)
+                                const calY = yScale.getPixelForValue(1800);
+                                ctx.fillStyle = '#f87171';
+                                ctx.font = 'bold 12px Pretendard';
+                                ctx.textAlign = 'left';
+                                ctx.fillText('1800', rightEdge, calY + 4);
+                                
+                                // 단백질 목표값 (우측)
+                                const proY = y1Scale.getPixelForValue(120);
+                                ctx.fillStyle = '#60a5fa';
+                                ctx.font = 'bold 12px Pretendard';
+                                ctx.fillText('120', rightEdge, proY + 4);
+                            }
                         }
                     },
                     scales: {
@@ -492,16 +527,18 @@
                             type: 'linear',
                             display: true,
                             position: 'left',
-                            title: { display: true, text: '칼로리' },
-                            ticks: { color: '#f87171' }
+                            ticks: { color: '#f87171', callback: function() { return ''; } },
+                            min: 0,
+                            max: 2200
                         },
                         y1: {
                             type: 'linear',
                             display: true,
                             position: 'right',
-                            title: { display: true, text: '단백질(g)' },
-                            ticks: { color: '#60a5fa' },
-                            grid: { drawOnChartArea: false }
+                            ticks: { color: '#60a5fa', callback: function() { return ''; } },
+                            grid: { drawOnChartArea: false },
+                            min: 0,
+                            max: 180
                         }
                     }
                 }
