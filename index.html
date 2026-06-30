@@ -77,13 +77,6 @@
             <button class="tab-btn" onclick="switchTab('monthly',this)">📈 월간</button>
         </div>
 
-        <div style="display: flex; gap: 8px; margin-bottom: 15px; margin-top: 15px; justify-content: center; flex-wrap: wrap;">
-            <button onclick="exportData()" class="btn" style="background: #667eea; color: white; font-size: 12px; padding: 8px 12px;">💾 내보내기</button>
-            <button onclick="document.getElementById('importFile').click()" class="btn" style="background: #667eea; color: white; font-size: 12px; padding: 8px 12px;">📂 불러오기</button>
-            <input type="file" id="importFile" style="display:none;" onchange="importData(event)">
-        </div>
-        <div id="syncStatus">☁️ Firebase 연결됨</div>
-
         <div id="today" class="tab-content active">
             <div class="date-nav">
                 <button class="btn btn-nav" onclick="prevDay()">← 이전</button>
@@ -143,6 +136,18 @@
                 </div>
                 <canvas id="monthlyGraphChart" style="max-height: 300px;"></canvas>
             </div>
+        </div>
+
+        <div id="syncStatus" style="text-align: center; margin-top: 20px;">☁️ Firebase 연결됨</div>
+
+        <div id="backupToast" style="display:none; max-width:280px; margin:12px auto 0; background:#fff3cd; border:1px solid #ffe69c; color:#664d03; border-radius:10px; padding:10px 30px 10px 12px; font-size:12px; font-weight:600; position:relative; box-shadow:0 2px 8px rgba(0,0,0,0.12);">
+            📥 한 달에 한 번 백업을 추천해요!
+            <button onclick="closeBackupToast()" style="position:absolute; top:6px; right:8px; background:none; border:none; font-size:14px; line-height:1; cursor:pointer; color:#664d03; padding:0;">✕</button>
+            <div style="position:absolute; bottom:-7px; left:50%; transform:translateX(-50%); width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent; border-top:7px solid #fff3cd;"></div>
+        </div>
+
+        <div style="text-align: center; margin-top: 8px;">
+            <button onclick="exportData()" class="btn" style="background: #f0f0f0; color: #667eea; font-size: 11px; padding: 6px 12px;">💾 백업 내보내기</button>
         </div>
     </div>
 
@@ -333,7 +338,24 @@ window.exportData = async () => {
     a.href = url; a.download = '칼로리_데이터_' + currentDate + '.json'; a.click();
     URL.revokeObjectURL(url);
     setSyncStatus('내보내기 완료 ✅');
+    // 백업했으니 이번 달 알림은 닫기
+    localStorage.setItem('backupReminderDismissed', new Date().toISOString().slice(0,7));
+    const t = document.getElementById('backupToast'); if (t) t.style.display = 'none';
 };
+
+// ── 백업 알림 (매월 첫 접속 시 1회) ──────────────────────────
+window.closeBackupToast = () => {
+    localStorage.setItem('backupReminderDismissed', new Date().toISOString().slice(0,7));
+    document.getElementById('backupToast').style.display = 'none';
+};
+
+function checkBackupReminder() {
+    const ym = new Date().toISOString().slice(0,7); // YYYY-MM
+    if (localStorage.getItem('backupReminderDismissed') !== ym) {
+        const t = document.getElementById('backupToast');
+        if (t) t.style.display = 'block';
+    }
+}
 
 window.importData = (event) => {
     const file = event.target.files[0]; if (!file) return;
@@ -474,6 +496,7 @@ async function init() {
         setSyncStatus('연결 오류 ❌');
     } finally {
         document.getElementById('loadingOverlay').style.display = 'none';
+        checkBackupReminder();
     }
 }
 init();
