@@ -285,7 +285,10 @@
         <div id="today" class="tab-content active">
             <div class="date-nav">
                 <button class="nav-btn" onclick="prevDate()">← 이전</button>
+                <button class="nav-btn" onclick="goToToday()" style="background: #667eea; color: white;">오늘</button>
                 <div class="current-date" id="selectedDate"></div>
+                <input type="date" id="dateInput" onchange="selectDate(this.value)" style="display: none;">
+                <button class="nav-btn" onclick="document.getElementById('dateInput').click()" style="font-size: 16px;">📅</button>
                 <button class="nav-btn" onclick="nextDate()">다음 →</button>
             </div>
 
@@ -456,6 +459,7 @@
             const d = new Date(selectedDate + 'T00:00:00');
             const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
             document.getElementById('selectedDate').textContent = `${selectedDate} (${dayNames[d.getDay()]})`;
+            document.getElementById('dateInput').value = selectedDate;
             document.getElementById('headerDate').textContent = selectedDate;
         }
 
@@ -470,6 +474,17 @@
             const d = new Date(selectedDate + 'T00:00:00');
             d.setDate(d.getDate() + 1);
             selectedDate = formatDate(d.toISOString().split('T')[0]);
+            createMealInputs();
+        }
+
+        function goToToday() {
+            selectedDate = formatDate(new Date().toISOString().split('T')[0]);
+            createMealInputs();
+        }
+
+        function selectDate(dateStr) {
+            selectedDate = formatDate(dateStr);
+            document.getElementById('dateInput').value = selectedDate;
             createMealInputs();
         }
 
@@ -736,14 +751,12 @@
         }
 
         // 초기화
-        if (!localStorage.getItem(`daily_2026-06-29`)) {
-            localStorage.setItem(`daily_2026-06-29`, JSON.stringify({ totalCal: 1718, totalProtein: 95.3 }));
-            localStorage.setItem(`meal_2026-06-29_breakfast`, JSON.stringify({ cal: 329, protein: 12 }));
-            localStorage.setItem(`meal_2026-06-29_snack1`, JSON.stringify({ cal: 280, protein: 23.5 }));
-            localStorage.setItem(`meal_2026-06-29_lunch`, JSON.stringify({ cal: 239, protein: 21 }));
-            localStorage.setItem(`meal_2026-06-29_snack2`, JSON.stringify({ cal: 98, protein: 1.5 }));
-            localStorage.setItem(`meal_2026-06-29_dinner`, JSON.stringify({ cal: 772, protein: 37.3 }));
-        }
+        localStorage.setItem(`daily_2026-06-29`, JSON.stringify({ totalCal: 1718, totalProtein: 95.3 }));
+        localStorage.setItem(`meal_2026-06-29_breakfast`, JSON.stringify({ cal: 329, protein: 12 }));
+        localStorage.setItem(`meal_2026-06-29_snack1`, JSON.stringify({ cal: 280, protein: 23.5 }));
+        localStorage.setItem(`meal_2026-06-29_lunch`, JSON.stringify({ cal: 239, protein: 21 }));
+        localStorage.setItem(`meal_2026-06-29_snack2`, JSON.stringify({ cal: 98, protein: 1.5 }));
+        localStorage.setItem(`meal_2026-06-29_dinner`, JSON.stringify({ cal: 772, protein: 37.3 }));
 
         createMealInputs();
     </script>
