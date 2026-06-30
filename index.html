@@ -21,9 +21,8 @@
         .btn { padding: 8px 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap; }
         .btn-nav { background: #f0f0f0; color: #667eea; }
         .btn-today { background: #667eea; color: white; }
-        .current-date { font-weight: 600; color: #333; font-size: 14px; letter-spacing: 0.5px; }
         input[type="date"] { padding: 8px 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; }
-        .btn-add { background: #e0e7ff; color: #667eea; border: 2px dashed #667eea; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: 600; margin-bottom: 15px; width: 100%; font-size: 13px; }
+        .btn-add { background: #e0e7ff; color: #667eea; border: 2px dashed #667eea; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: 600; width: 100%; font-size: 13px; margin-top: 15px; }
         .meals { margin-bottom: 15px; }
         .meal { background: #f9f9f9; padding: 12px; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid #667eea; }
         .meal-header { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
@@ -47,9 +46,11 @@
         .stat { background: rgba(255,255,255,0.2); padding: 8px; border-radius: 6px; }
         .stat-label { font-size: 10px; opacity: 0.9; }
         .stat-value { font-size: 18px; font-weight: 700; margin-top: 2px; }
-        .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .stat-diff { font-size: 11px; margin-top: 4px; font-weight: 600; background: rgba(255, 255, 255, 0.7); padding: 4px 8px; border-radius: 4px; }
+        .stat-green { color: #4ade80; }
+        .stat-red { color: #ef4444; }
+        .buttons { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 15px; }
         .btn-save { background: #667eea; color: white; padding: 12px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; font-size: 13px; width: 100%; }
-        .btn-reset { background: #f0f0f0; color: #333; }
         .table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
         .table th { background: #667eea; color: white; padding: 8px; text-align: center; font-weight: 600; }
         .table td { padding: 8px; text-align: center; border-bottom: 1px solid #e0e0e0; }
@@ -84,23 +85,25 @@
                     </label>
                 </div>
                 <div class="stat-row">
-                    <div class="stat">
+                    <div class="stat" id="calStat">
                         <div class="stat-label">칼로리</div>
                         <div class="stat-value"><span id="totalCal">0</span> / 1800</div>
+                        <div class="stat-diff" id="calDiff"></div>
                     </div>
-                    <div class="stat">
+                    <div class="stat" id="proStat">
                         <div class="stat-label">단백질</div>
                         <div class="stat-value"><span id="totalPro">0</span> / 120</div>
+                        <div class="stat-diff" id="proDiff"></div>
                     </div>
                 </div>
             </div>
 
-            <button class="btn-add" onclick="addMeal()">+ 항목 추가</button>
             <div id="meals"></div>
+
+            <button class="btn-add" onclick="addMeal()">+ 항목 추가</button>
 
             <div class="buttons">
                 <button class="btn-save" onclick="saveMeals()">💾 저장</button>
-                <button class="btn-save btn-reset" onclick="clearAll()">🔄 초기화</button>
             </div>
         </div>
 
@@ -130,7 +133,16 @@
         let data = {};
 
         function initData() {
-            // 6/29 초기값 (없을 때만 생성)
+            // 6/30 원래 데이터
+            localStorage.setItem('cal_2026-06-30', JSON.stringify({
+                exercise: false,
+                meals: [
+                    { id: 1, name: '☀️ 아침', fixed: true, cal: 295, pro: 17, notes: ['토마토 블루베리 스무디 (200ml)', '감동란 2개'] },
+                    { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
+                    { id: 3, name: '🌙 저녁', fixed: true, cal: '', pro: '', notes: [] }
+                ]
+            }));
+
             if (!localStorage.getItem('cal_2026-06-29')) {
                 localStorage.setItem('cal_2026-06-29', JSON.stringify({
                     exercise: false,
@@ -143,23 +155,10 @@
                     ]
                 }));
             }
-
-            // 6/30 초기값 (없을 때만 생성)
-            if (!localStorage.getItem('cal_2026-06-30')) {
-                localStorage.setItem('cal_2026-06-30', JSON.stringify({
-                    exercise: false,
-                    meals: [
-                        { id: 1, name: '☀️ 아침', fixed: true, cal: 295, pro: 17, notes: ['토마토 블루베리 스무디 (200ml)', '감동란 2개'] },
-                        { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
-                        { id: 3, name: '🌙 저녁', fixed: true, cal: '', pro: '', notes: [] }
-                    ]
-                }));
-            }
         }
 
         function load() {
             initData();
-            
             const stored = localStorage.getItem('cal_' + currentDate);
             if (stored) {
                 data = JSON.parse(stored);
@@ -178,8 +177,6 @@
         }
 
         function updateDate() {
-            const d = new Date(currentDate);
-            const days = ['일','월','화','수','목','금','토'];
             document.getElementById('dateInput').value = currentDate;
         }
 
@@ -236,10 +233,41 @@
                 if (calEl) c += parseFloat(calEl.value) || 0;
                 if (proEl) p += parseFloat(proEl.value) || 0;
             });
+            
             const calSpan = document.getElementById('totalCal');
             const proSpan = document.getElementById('totalPro');
             if (calSpan) calSpan.textContent = Math.round(c);
             if (proSpan) proSpan.textContent = p.toFixed(1);
+
+            // 칼로리: 목표 1800
+            const calDiff = Math.round(c - 1800);
+            const calDiffEl = document.getElementById('calDiff');
+            if (calDiffEl) {
+                const calColor = c < 1800 ? 'stat-green' : 'stat-red';
+                const calSign = calDiff >= 0 ? '+' : '';
+                calDiffEl.className = 'stat-diff ' + calColor;
+                calDiffEl.textContent = calSign + calDiff;
+            }
+
+            // 단백질: 목표 120
+            const proDiff = Math.round((p - 120) * 10) / 10;
+            const proDiffEl = document.getElementById('proDiff');
+            if (proDiffEl) {
+                const proColor = p < 120 ? 'stat-red' : 'stat-green';
+                const proSign = proDiff >= 0 ? '+' : '';
+                proDiffEl.className = 'stat-diff ' + proColor;
+                proDiffEl.textContent = proSign + proDiff;
+            }
+
+            // 배경색 변경
+            const calStat = document.getElementById('calStat');
+            const proStat = document.getElementById('proStat');
+            if (calStat) {
+                calStat.style.background = c < 1800 ? 'rgba(74, 222, 128, 0.3)' : 'rgba(248, 113, 113, 0.3)';
+            }
+            if (proStat) {
+                proStat.style.background = p < 120 ? 'rgba(139, 92, 246, 0.3)' : 'rgba(168, 85, 247, 0.3)';
+            }
         }
 
         function addNote(mealId) {
@@ -317,14 +345,6 @@
             alert('저장됨! ✅');
             loadWeekly();
             loadMonthly();
-        }
-
-        function clearAll() {
-            data.meals.forEach(meal => {
-                document.getElementById('cal_' + meal.id).value = '';
-                document.getElementById('pro_' + meal.id).value = '';
-            });
-            calc();
         }
 
         function prevDay() {
