@@ -124,16 +124,19 @@
         let data = {};
 
         function load() {
-            // 이전 데이터 확인 (calories_ 키)
-            let stored = localStorage.getItem('calories_' + currentDate);
-            if (stored) {
-                data = JSON.parse(stored);
-                localStorage.setItem('cal_' + currentDate, stored); // 새 키로 저장
-                localStorage.removeItem('calories_' + currentDate); // 이전 키 삭제
-            } else {
-                stored = localStorage.getItem('cal_' + currentDate);
-                data = stored ? JSON.parse(stored) : getDefaultData();
-            }
+            // 6/29 데이터 확실하게 저장
+            localStorage.setItem('cal_2026-06-29', JSON.stringify({
+                meals: [
+                    { id: 1, name: '☀️ 아침', fixed: true, cal: 329, pro: 12, notes: [] },
+                    { id: 4, name: '🥤 간식1', fixed: false, cal: 280, pro: 23.5, notes: [] },
+                    { id: 2, name: '🌤️ 점심', fixed: true, cal: 239, pro: 21, notes: [] },
+                    { id: 5, name: '🍪 간식2', fixed: false, cal: 98, pro: 1.5, notes: [] },
+                    { id: 3, name: '🌙 저녁', fixed: true, cal: 772, pro: 37.3, notes: [] }
+                ]
+            }));
+
+            let stored = localStorage.getItem('cal_' + currentDate);
+            data = stored ? JSON.parse(stored) : getDefaultData();
 
             updateDate();
             render();
