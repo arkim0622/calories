@@ -77,6 +77,12 @@
             </div>
 
             <div class="stats">
+                <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; justify-content: center;">
+                    <label style="color: white; font-weight: 600; font-size: 13px; display: flex; gap: 6px; align-items: center;">
+                        <input type="checkbox" id="exerciseCheck" onchange="updateExercise()" style="width: 18px; height: 18px; cursor: pointer;">
+                        💪 운동함
+                    </label>
+                </div>
                 <div class="stat-row">
                     <div class="stat">
                         <div class="stat-label">칼로리</div>
@@ -124,16 +130,19 @@
         let data = {};
 
         function load() {
-            // 6/29 데이터 확실하게 저장
-            localStorage.setItem('cal_2026-06-29', JSON.stringify({
-                meals: [
-                    { id: 1, name: '☀️ 아침', fixed: true, cal: 329, pro: 12, notes: [] },
-                    { id: 4, name: '🥤 간식1', fixed: false, cal: 280, pro: 23.5, notes: [] },
-                    { id: 2, name: '🌤️ 점심', fixed: true, cal: 239, pro: 21, notes: [] },
-                    { id: 5, name: '🍪 간식2', fixed: false, cal: 98, pro: 1.5, notes: [] },
-                    { id: 3, name: '🌙 저녁', fixed: true, cal: 772, pro: 37.3, notes: [] }
-                ]
-            }));
+            // 6/29가 localStorage에 없을 때만 초기값 설정 (덮어쓰지 않음!)
+            if (!localStorage.getItem('cal_2026-06-29')) {
+                localStorage.setItem('cal_2026-06-29', JSON.stringify({
+                    exercise: false,
+                    meals: [
+                        { id: 1, name: '☀️ 아침', fixed: true, cal: 329, pro: 12, notes: [] },
+                        { id: 4, name: '🥤 간식', fixed: false, cal: 280, pro: 23.5, notes: [] },
+                        { id: 2, name: '🌤️ 점심', fixed: true, cal: 239, pro: 21, notes: [] },
+                        { id: 5, name: '🍪 간식2', fixed: false, cal: 98, pro: 1.5, notes: [] },
+                        { id: 3, name: '🌙 저녁', fixed: true, cal: 772, pro: 37.3, notes: [] }
+                    ]
+                }));
+            }
 
             let stored = localStorage.getItem('cal_' + currentDate);
             data = stored ? JSON.parse(stored) : getDefaultData();
@@ -145,9 +154,10 @@
         function getDefaultData() {
             if (currentDate === '2026-06-29') {
                 return {
+                    exercise: false,
                     meals: [
                         { id: 1, name: '☀️ 아침', fixed: true, cal: 329, pro: 12, notes: [] },
-                        { id: 4, name: '🥤 간식1', fixed: false, cal: 280, pro: 23.5, notes: [] },
+                        { id: 4, name: '🥤 간식', fixed: false, cal: 280, pro: 23.5, notes: [] },
                         { id: 2, name: '🌤️ 점심', fixed: true, cal: 239, pro: 21, notes: [] },
                         { id: 5, name: '🍪 간식2', fixed: false, cal: 98, pro: 1.5, notes: [] },
                         { id: 3, name: '🌙 저녁', fixed: true, cal: 772, pro: 37.3, notes: [] }
@@ -155,6 +165,7 @@
                 };
             }
             return {
+                exercise: false,
                 meals: [
                     { id: 1, name: '☀️ 아침', fixed: true, cal: '', pro: '', notes: [] },
                     { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
@@ -170,6 +181,7 @@
         }
 
         function render() {
+            document.getElementById('exerciseCheck').checked = data.exercise || false;
             let html = '';
             data.meals.forEach((meal, idx) => {
                 html += '<div class="meal">';
@@ -220,6 +232,10 @@
             });
             document.getElementById('totalCal').textContent = Math.round(c);
             document.getElementById('totalPro').textContent = p.toFixed(1);
+        }
+
+        function updateExercise() {
+            data.exercise = document.getElementById('exerciseCheck').checked;
         }
 
         function addNote(mealId) {
@@ -306,6 +322,7 @@
         }
 
         function save() {
+            data.exercise = document.getElementById('exerciseCheck').checked;
             data.meals.forEach(meal => {
                 meal.cal = parseFloat(document.getElementById('cal_' + meal.id).value) || 0;
                 meal.pro = parseFloat(document.getElementById('pro_' + meal.id).value) || 0;
@@ -347,12 +364,13 @@
                 const date = new Date(monday);
                 date.setDate(date.getDate() + i);
                 const dateStr = date.toISOString().split('T')[0];
-                const stored = JSON.parse(localStorage.getItem('cal_' + dateStr) || '{"meals":[]}');
+                const stored = JSON.parse(localStorage.getItem('cal_' + dateStr) || '{"exercise":false,"meals":[]}');
                 let c = 0, p = 0;
                 if (stored.meals) {
                     stored.meals.forEach(m => { c += m.cal || 0; p += m.pro || 0; });
                 }
-                html += '<tr><td>' + days[i] + '</td><td>' + Math.round(c) + '</td><td>' + p.toFixed(1) + '</td></tr>';
+                const exMark = stored.exercise ? '💪' : '';
+                html += '<tr><td>' + days[i] + ' ' + exMark + '</td><td>' + Math.round(c) + '</td><td>' + p.toFixed(1) + '</td></tr>';
             }
             document.getElementById('weeklyTable').innerHTML = html;
         }
@@ -363,13 +381,14 @@
                 const date = new Date(currentDate.slice(0,7) + '-' + String(i).padStart(2,'0'));
                 if (date.getMonth() !== new Date(currentDate).getMonth()) break;
                 const dateStr = date.toISOString().split('T')[0];
-                const stored = JSON.parse(localStorage.getItem('cal_' + dateStr) || '{"meals":[]}');
+                const stored = JSON.parse(localStorage.getItem('cal_' + dateStr) || '{"exercise":false,"meals":[]}');
                 let c = 0, p = 0;
                 if (stored.meals) {
                     stored.meals.forEach(m => { c += m.cal || 0; p += m.pro || 0; });
                 }
                 if (c > 0 || p > 0) {
-                    html += '<tr><td>' + dateStr + '</td><td>' + Math.round(c) + '</td><td>' + p.toFixed(1) + '</td></tr>';
+                    const exMark = stored.exercise ? '💪' : '';
+                    html += '<tr><td>' + dateStr + ' ' + exMark + '</td><td>' + Math.round(c) + '</td><td>' + p.toFixed(1) + '</td></tr>';
                 }
             }
             document.getElementById('monthlyTable').innerHTML = html || '<tr><td colspan="3">기록 없음</td></tr>';
