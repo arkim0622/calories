@@ -405,6 +405,9 @@ async function loadWeekly() {
         html += `<tr><td>${dayName} ${s.exercise?'🏋🏻‍♀️':''}</td><td>${Math.round(c)}</td><td>${p.toFixed(1)}</td></tr>`;
     });
     document.getElementById('weeklyTable').innerHTML = html;
+    // 입력값에 따라 y축 최댓값 자동 조정 (목표선 + 여유 10%)
+    const calMax = Math.max(2200, Math.ceil(Math.max(...calData, 1800) * 1.1 / 100) * 100);
+    const proMax = Math.max(180, Math.ceil(Math.max(...proData, 120) * 1.1 / 10) * 10);
     const ctx = document.getElementById('weeklyChart').getContext('2d');
     if (window.weeklyChartInstance) window.weeklyChartInstance.destroy();
     Chart.register(ChartDataLabels);
@@ -416,7 +419,7 @@ async function loadWeekly() {
             {data:[120,120,120,120,120,120,120],borderColor:'#60a5fa',borderDash:[8,4],borderWidth:2,fill:false,pointRadius:0,yAxisID:'y1',datalabels:{display:false}}
         ]},
         options:{ responsive:true, plugins:{ legend:{display:false}, datalabels:{display:true,font:{size:11,weight:'bold'},align:'top',offset:5} },
-            scales:{ y:{type:'linear',position:'left',ticks:{callback:()=>''},min:0,max:2200}, y1:{type:'linear',position:'right',ticks:{callback:()=>''},grid:{drawOnChartArea:false},min:0,max:180} } }
+            scales:{ y:{type:'linear',position:'left',ticks:{callback:()=>''},min:0,max:calMax}, y1:{type:'linear',position:'right',ticks:{callback:()=>''},grid:{drawOnChartArea:false},min:0,max:proMax} } }
     });
 }
 
@@ -482,6 +485,9 @@ window.loadMonthlyGraph = async (period) => {
         else { if(dom===1||isToday) label=`${d.getMonth()+1}/${dom}`; }
         labels.push(label); calData.push(c); proData.push(p);
     });
+    // 입력값에 따라 y축 최댓값 자동 조정 (목표선 + 여유 10%)
+    const calMax = Math.max(2200, Math.ceil(Math.max(...calData, 1800) * 1.1 / 100) * 100);
+    const proMax = Math.max(180, Math.ceil(Math.max(...proData, 120) * 1.1 / 10) * 10);
     const ctx = document.getElementById('monthlyGraphChart').getContext('2d');
     if (window.monthlyGraphInstance) window.monthlyGraphInstance.destroy();
     Chart.register(ChartDataLabels);
@@ -493,7 +499,7 @@ window.loadMonthlyGraph = async (period) => {
             {data:Array(proData.length).fill(120),borderColor:'#60a5fa',borderDash:[8,4],borderWidth:1.5,fill:false,pointRadius:0,yAxisID:'y1',datalabels:{display:false}}
         ]},
         options:{ responsive:true, plugins:{legend:{display:false}},
-            scales:{ x:{ticks:{font:{size:10}}}, y:{type:'linear',position:'left',ticks:{callback:()=>''},min:0,max:2200}, y1:{type:'linear',position:'right',ticks:{callback:()=>''},grid:{drawOnChartArea:false},min:0,max:180} } }
+            scales:{ x:{ticks:{font:{size:10}}}, y:{type:'linear',position:'left',ticks:{callback:()=>''},min:0,max:calMax}, y1:{type:'linear',position:'right',ticks:{callback:()=>''},grid:{drawOnChartArea:false},min:0,max:proMax} } }
     });
 };
 
