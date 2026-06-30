@@ -56,28 +56,34 @@
         .table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
         .table th { background: #667eea; color: white; padding: 8px; text-align: center; font-weight: 600; }
         .table td { padding: 8px; text-align: center; border-bottom: 1px solid #e0e0e0; }
+        #loadingOverlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.9); display: flex; align-items: center; justify-content: center; z-index: 9999; flex-direction: column; gap: 12px; }
+        .spinner { width: 36px; height: 36px; border: 4px solid #e0e7ff; border-top: 4px solid #667eea; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #syncStatus { font-size: 11px; color: #667eea; font-weight: 600; text-align: right; padding: 4px 8px; background: #e0e7ff; border-radius: 6px; margin-bottom: 8px; }
     </style>
 </head>
 <body>
+    <div id="loadingOverlay">
+        <div class="spinner"></div>
+        <div style="color: #667eea; font-weight: 600; font-size: 14px;">동기화 중...</div>
+    </div>
+
     <div class="container">
-        <div class="header">
-            <div class="title">💪🏼</div>
-        </div>
+        <div class="header"><div class="title">💪🏼</div></div>
 
         <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('today')">📅 오늘</button>
-            <button class="tab-btn" onclick="switchTab('weekly')">📊 주간</button>
-            <button class="tab-btn" onclick="switchTab('monthly')">📈 월간</button>
+            <button class="tab-btn active" onclick="switchTab('today',this)">📅 오늘</button>
+            <button class="tab-btn" onclick="switchTab('weekly',this)">📊 주간</button>
+            <button class="tab-btn" onclick="switchTab('monthly',this)">📈 월간</button>
         </div>
 
-        <!-- 데이터 동기화 버튼 (상단 고정) -->
         <div style="display: flex; gap: 8px; margin-bottom: 15px; margin-top: 15px; justify-content: center; flex-wrap: wrap;">
             <button onclick="exportData()" class="btn" style="background: #667eea; color: white; font-size: 12px; padding: 8px 12px;">💾 내보내기</button>
             <button onclick="document.getElementById('importFile').click()" class="btn" style="background: #667eea; color: white; font-size: 12px; padding: 8px 12px;">📂 불러오기</button>
             <input type="file" id="importFile" style="display:none;" onchange="importData(event)">
         </div>
+        <div id="syncStatus">☁️ Firebase 연결됨</div>
 
-        <!-- 오늘 탭 -->
         <div id="today" class="tab-content active">
             <div class="date-nav">
                 <button class="btn btn-nav" onclick="prevDay()">← 이전</button>
@@ -85,7 +91,6 @@
                 <input type="date" id="dateInput" onchange="changeDate()">
                 <button class="btn btn-nav" onclick="nextDay()">다음 →</button>
             </div>
-
             <div class="stats">
                 <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; justify-content: center;">
                     <label style="color: white; font-weight: 600; font-size: 13px; display: flex; gap: 6px; align-items: center;">
@@ -106,40 +111,27 @@
                     </div>
                 </div>
             </div>
-
             <div id="meals"></div>
-
             <button class="btn-add" onclick="addMeal()">+ 항목 추가</button>
-
             <div class="buttons">
                 <button class="btn-save" onclick="saveMeals()">💾 저장</button>
             </div>
         </div>
 
-        <!-- 주간 탭 -->
         <div id="weekly" class="tab-content">
             <table class="table">
-                <thead>
-                    <tr><th>날짜</th><th>칼로리</th><th>단백질</th></tr>
-                </thead>
+                <thead><tr><th>날짜</th><th>칼로리</th><th>단백질</th></tr></thead>
                 <tbody id="weeklyTable"></tbody>
             </table>
             <canvas id="weeklyChart" style="margin-top: 20px; max-height: 300px;"></canvas>
         </div>
 
-        <!-- 월간 탭 -->
         <div id="monthly" class="tab-content">
             <div style="display: flex; gap: 10px; margin-bottom: 15px; justify-content: center;">
                 <button id="calendarViewBtn" class="btn" onclick="switchMonthlyView('calendar')" style="background: #667eea; color: white;">📅 캘린더</button>
                 <button id="graphViewBtn" class="btn" onclick="switchMonthlyView('graph')" style="background: #f0f0f0; color: #667eea;">📊 그래프</button>
             </div>
-            
-            <!-- 캘린더 뷰 -->
-            <div id="calendarView" style="display: block;">
-                <div id="monthlyCalendar"></div>
-            </div>
-            
-            <!-- 그래프 뷰 -->
+            <div id="calendarView"><div id="monthlyCalendar"></div></div>
             <div id="graphView" style="display: none;">
                 <div style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; justify-content: center;">
                     <button class="btn" onclick="loadMonthlyGraph('1w')" style="background: #f0f0f0; color: #667eea; font-size: 12px;">1주일</button>
@@ -154,679 +146,337 @@
         </div>
     </div>
 
-    <script>
-        let currentDate = new Date().toISOString().split('T')[0];
-        let data = {};
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
+import { initializeFirestore, doc, getDoc, setDoc, collection, getDocs, writeBatch } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js';
 
-        function initData() {
-            // 이미 초기화됨 (이후로는 실행 안 함)
-            if (localStorage.getItem('_app_initialized')) return;
-            
-            // 6/30 데이터 (처음 한 번만)
-            localStorage.setItem('cal_2026-06-30', JSON.stringify({
-                exercise: false,
-                meals: [
-                    { id: 1, name: '☀️ 아침', fixed: true, cal: 295, pro: 17, notes: ['토마토 블루베리 스무디 (200ml)', '감동란 2개'] },
-                    { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
-                    { id: 3, name: '🌙 저녁', fixed: true, cal: '', pro: '', notes: [] }
-                ]
-            }));
+const firebaseConfig = {
+    apiKey: "AIzaSyBE60QXHNa9Q8xzdgRxslsksSk9spZtiCw",
+    authDomain: "calories-tracker-fb95f.firebaseapp.com",
+    projectId: "calories-tracker-fb95f",
+    storageBucket: "calories-tracker-fb95f.firebasestorage.app",
+    messagingSenderId: "412312685562",
+    appId: "1:412312685562:web:cc791002ead30419d37243"
+};
 
-            // 6/29 데이터 (처음 한 번만)
-            localStorage.setItem('cal_2026-06-29', JSON.stringify({
-                exercise: false,
-                meals: [
-                    { id: 1, name: '☀️ 아침', fixed: true, cal: 329, pro: 12, notes: [] },
-                    { id: 4, name: '🥤 간식', fixed: false, cal: 280, pro: 23.5, notes: [] },
-                    { id: 2, name: '🌤️ 점심', fixed: true, cal: 239, pro: 21, notes: [] },
-                    { id: 5, name: '🍪 간식2', fixed: false, cal: 98, pro: 1.5, notes: [] },
-                    { id: 3, name: '🌙 저녁', fixed: true, cal: 772, pro: 37.3, notes: [] }
-                ]
-            }));
-            
-            // 초기화 완료 플래그
-            localStorage.setItem('_app_initialized', 'true');
-        }
+const app = initializeApp(firebaseConfig);
+// 일부 네트워크 환경에서 WebChannel 연결이 막혀 무한 대기하는 문제 방지
+const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
 
-        function load() {
-            const stored = localStorage.getItem('cal_' + currentDate);
-            if (stored) {
-                data = JSON.parse(stored);
-            } else {
-                data = {
-                    exercise: false,
-                    meals: [
-                        { id: 1, name: '☀️ 아침', fixed: true, cal: '', pro: '', notes: [] },
-                        { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
-                        { id: 3, name: '🌙 저녁', fixed: true, cal: '', pro: '', notes: [] }
-                    ]
-                };
-            }
-            updateDate();
-            render();
-        }
+let currentDate = new Date().toISOString().split('T')[0];
+let data = {};
 
-        function importData(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = JSON.parse(e.target.result);
-                    Object.keys(data).forEach(key => {
-                        localStorage.setItem(key, data[key]);
-                    });
-                    alert('✅ 데이터 불러오기 완료!\n페이지를 새로고침합니다.');
-                    location.reload();
-                } catch (err) {
-                    alert('❌ 파일 형식이 잘못되었습니다.');
+function setSyncStatus(msg) {
+    const el = document.getElementById('syncStatus');
+    if (el) el.textContent = '☁️ ' + msg;
+}
+
+async function fetchDateRange(dates) {
+    const promises = dates.map(d => getDoc(doc(db, 'caldata', d)));
+    const docs = await Promise.all(promises);
+    const result = {};
+    docs.forEach((snap, i) => {
+        result[dates[i]] = snap.exists() ? snap.data() : { exercise: false, meals: [] };
+    });
+    return result;
+}
+
+function makeDateList(start, end) {
+    const list = [];
+    for (let d = new Date(start); d <= new Date(end); d.setDate(d.getDate() + 1)) {
+        list.push(new Date(d).toISOString().split('T')[0]);
+    }
+    return list;
+}
+
+async function migrateFromLocalStorage() {
+    const metaSnap = await getDoc(doc(db, 'meta', 'info'));
+    if (metaSnap.exists() && metaSnap.data().migrated) return;
+
+    const calKeys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('cal_')) calKeys.push(key);
+    }
+
+    if (calKeys.length > 0) {
+        const batch = writeBatch(db);
+        calKeys.forEach(key => {
+            try {
+                const dateStr = key.replace('cal_', '');
+                const dayData = JSON.parse(localStorage.getItem(key));
+                if (dayData && typeof dayData === 'object') {
+                    batch.set(doc(db, 'caldata', dateStr), dayData);
                 }
-            };
-            reader.readAsText(file);
-        }
+            } catch(e) {}
+        });
+        await batch.commit();
+    }
+    await setDoc(doc(db, 'meta', 'info'), { migrated: true });
+}
 
-        function exportData() {
-            const data = {};
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                data[key] = localStorage.getItem(key);
-            }
-            const json = JSON.stringify(data, null, 2);
-            const blob = new Blob([json], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = '칼로리_데이터_' + new Date().toISOString().split('T')[0] + '.json';
-            a.click();
-            alert('✅ 데이터 내보내기 완료!\n파일이 다운로드되었습니다.');
-            URL.revokeObjectURL(url);
-        }
+async function load() {
+    const snap = await getDoc(doc(db, 'caldata', currentDate));
+    data = snap.exists() ? snap.data() : {
+        exercise: false,
+        meals: [
+            { id: 1, name: '☀️ 아침', fixed: true, cal: '', pro: '', notes: [] },
+            { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
+            { id: 3, name: '🌙 저녁', fixed: true, cal: '', pro: '', notes: [] }
+        ]
+    };
+    document.getElementById('dateInput').value = currentDate;
+    render();
+}
 
-        function updateDate() {
-            document.getElementById('dateInput').value = currentDate;
-        }
+function render() {
+    document.getElementById('exerciseCheck').checked = data.exercise || false;
+    let html = '';
+    data.meals.forEach((meal, idx) => {
+        html += `<div class="meal">
+        <div class="meal-header">
+            <div class="meal-name"><input type="text" value="${meal.name}" id="name_${meal.id}" ${meal.fixed ? 'readonly' : ''}></div>
+            <div class="meal-controls">
+            ${!meal.fixed ? `<button class="meal-btn" onclick="moveUp(${idx})">↑</button><button class="meal-btn" onclick="moveDown(${idx})">↓</button><button class="meal-btn" onclick="delMeal(${meal.id})">✕</button>` : ''}
+            </div>
+        </div>
+        <div class="notes">
+            ${meal.notes.map((note, nidx) => `<div class="note-item"><div class="note-text">${note}</div><button class="note-del" onclick="editNote(${meal.id},${nidx})">수정</button><button class="note-del" onclick="delNote(${meal.id},${nidx})">✕</button></div>`).join('')}
+            <div class="note-input">
+                <input type="text" id="noteInput_${meal.id}" placeholder="음식 상세" onkeypress="if(event.key==='Enter') addNote(${meal.id})">
+                <button onclick="addNote(${meal.id})">추가</button>
+            </div>
+        </div>
+        <div class="inputs">
+            <div class="input-group"><label class="label">칼로리</label><input type="number" id="cal_${meal.id}" value="${meal.cal || ''}" placeholder="0" oninput="calc()"></div>
+            <div class="input-group"><label class="label">단백질(g)</label><input type="number" id="pro_${meal.id}" value="${meal.pro || ''}" placeholder="0" step="0.1" oninput="calc()"></div>
+        </div>
+        </div>`;
+    });
+    document.getElementById('meals').innerHTML = html;
+    calc();
+}
 
-        function render() {
-            document.getElementById('exerciseCheck').checked = data.exercise || false;
-            let html = '';
-            data.meals.forEach((meal, idx) => {
-                html += '<div class="meal">';
-                html += '<div class="meal-header">';
-                html += '<div class="meal-name"><input type="text" value="' + meal.name + '" id="name_' + meal.id + '" ' + (meal.fixed ? 'readonly' : '') + '></div>';
-                html += '<div class="meal-controls">';
-                if (!meal.fixed) {
-                    html += '<button class="meal-btn" onclick="moveUp(' + idx + ')">↑</button>';
-                    html += '<button class="meal-btn" onclick="moveDown(' + idx + ')">↓</button>';
-                    html += '<button class="meal-btn" onclick="delMeal(' + meal.id + ')">✕</button>';
-                }
-                html += '</div></div>';
-                
-                html += '<div class="notes">';
-                meal.notes.forEach((note, nidx) => {
-                    html += '<div class="note-item">';
-                    html += '<div class="note-text">' + note + '</div>';
-                    html += '<button class="note-del" onclick="editNote(' + meal.id + ',' + nidx + ')">수정</button>';
-                    html += '<button class="note-del" onclick="delNote(' + meal.id + ',' + nidx + ')">✕</button>';
-                    html += '</div>';
-                });
-                html += '<div class="note-input">';
-                html += '<input type="text" id="noteInput_' + meal.id + '" placeholder="음식 상세" onkeypress="if(event.key==\'Enter\') addNote(' + meal.id + ')">';
-                html += '<button onclick="addNote(' + meal.id + ')">추가</button>';
-                html += '</div>';
-                html += '</div>';
-                
-                html += '<div class="inputs">';
-                html += '<div class="input-group"><label class="label">칼로리</label>';
-                html += '<input type="number" id="cal_' + meal.id + '" value="' + (meal.cal || '') + '" placeholder="0" oninput="calc()">';
-                html += '</div>';
-                html += '<div class="input-group"><label class="label">단백질(g)</label>';
-                html += '<input type="number" id="pro_' + meal.id + '" value="' + (meal.pro || '') + '" placeholder="0" step="0.1" oninput="calc()">';
-                html += '</div>';
-                html += '</div>';
-                
-                html += '</div>';
+function calc() {
+    if (!data || !data.meals) return;
+    let c = 0, p = 0;
+    data.meals.forEach(meal => {
+        const calEl = document.getElementById('cal_' + meal.id);
+        const proEl = document.getElementById('pro_' + meal.id);
+        if (calEl) c += parseFloat(calEl.value) || 0;
+        if (proEl) p += parseFloat(proEl.value) || 0;
+    });
+    document.getElementById('totalCal').textContent = Math.round(c);
+    document.getElementById('totalPro').textContent = p.toFixed(1);
+    const calDiff = Math.round(c - 1800);
+    const calDiffEl = document.getElementById('calDiff');
+    calDiffEl.className = 'stat-diff ' + (c < 1800 ? 'stat-green' : 'stat-red');
+    calDiffEl.textContent = (calDiff >= 0 ? '+' : '') + calDiff;
+    const proDiff = Math.round((p - 120) * 10) / 10;
+    const proDiffEl = document.getElementById('proDiff');
+    proDiffEl.className = 'stat-diff ' + (p < 120 ? 'stat-red' : 'stat-green');
+    proDiffEl.textContent = (proDiff >= 0 ? '+' : '') + proDiff;
+}
+
+// ── 전역 함수 노출 ───────────────────────────────────────────
+
+window.addNote = (mealId) => {
+    const input = document.getElementById('noteInput_' + mealId);
+    const text = input.value.trim();
+    if (text) { const meal = data.meals.find(m => m.id === mealId); if (meal) { meal.notes.push(text); input.value = ''; render(); } }
+};
+window.delNote = (mealId, idx) => { const meal = data.meals.find(m => m.id === mealId); if (meal) { meal.notes.splice(idx, 1); render(); } };
+window.editNote = (mealId, idx) => { const meal = data.meals.find(m => m.id === mealId); if (meal) { const t = prompt('수정:', meal.notes[idx]); if (t !== null && t.trim()) { meal.notes[idx] = t.trim(); render(); } } };
+window.addMeal = () => { const emojis = ['🥤','🍪','🍰','🧁','🍩','☕','🥛','🍫']; const id = Math.max(0, ...data.meals.map(m => m.id)) + 1; data.meals.push({ id, name: emojis[Math.floor(Math.random()*emojis.length)] + ' 간식', fixed: false, cal: '', pro: '', notes: [] }); render(); };
+window.delMeal = (id) => { data.meals = data.meals.filter(m => m.id !== id); render(); };
+window.moveUp = (idx) => { if (idx > 0 && !data.meals[idx].fixed) { [data.meals[idx], data.meals[idx-1]] = [data.meals[idx-1], data.meals[idx]]; render(); } };
+window.moveDown = (idx) => { if (idx < data.meals.length-1 && !data.meals[idx].fixed) { [data.meals[idx], data.meals[idx+1]] = [data.meals[idx+1], data.meals[idx]]; render(); } };
+window.updateExercise = () => { data.exercise = document.getElementById('exerciseCheck').checked; };
+window.calc = calc;
+
+window.saveMeals = async () => {
+    data.exercise = document.getElementById('exerciseCheck').checked;
+    data.meals.forEach(meal => {
+        meal.cal = parseFloat(document.getElementById('cal_' + meal.id)?.value) || 0;
+        meal.pro = parseFloat(document.getElementById('pro_' + meal.id)?.value) || 0;
+        const nameEl = document.getElementById('name_' + meal.id);
+        if (nameEl && !meal.fixed) meal.name = nameEl.value;
+    });
+    setSyncStatus('저장 중...');
+    await setDoc(doc(db, 'caldata', currentDate), data);
+    setSyncStatus('저장됨 ✅');
+    setTimeout(() => setSyncStatus('Firebase 연결됨'), 2000);
+};
+
+window.prevDay = async () => { const d = new Date(currentDate); d.setDate(d.getDate()-1); currentDate = d.toISOString().split('T')[0]; await load(); };
+window.nextDay = async () => { const d = new Date(currentDate); d.setDate(d.getDate()+1); currentDate = d.toISOString().split('T')[0]; await load(); };
+window.todayDay = async () => { currentDate = new Date().toISOString().split('T')[0]; await load(); };
+window.changeDate = async () => { currentDate = document.getElementById('dateInput').value; await load(); };
+
+window.switchTab = (tab, btn) => {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(tab).classList.add('active');
+    if (btn) btn.classList.add('active');
+    if (tab === 'weekly') loadWeekly();
+    if (tab === 'monthly') loadMonthly();
+};
+
+window.exportData = async () => {
+    setSyncStatus('내보내는 중...');
+    const snapshot = await getDocs(collection(db, 'caldata'));
+    const exportObj = {};
+    snapshot.forEach(d => { exportObj['cal_' + d.id] = JSON.stringify(d.data()); });
+    const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = '칼로리_데이터_' + currentDate + '.json'; a.click();
+    URL.revokeObjectURL(url);
+    setSyncStatus('내보내기 완료 ✅');
+};
+
+window.importData = (event) => {
+    const file = event.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            setSyncStatus('불러오는 중...');
+            const imported = JSON.parse(e.target.result);
+            const batch = writeBatch(db);
+            Object.keys(imported).forEach(key => {
+                if (key.startsWith('cal_')) { batch.set(doc(db, 'caldata', key.replace('cal_','')), JSON.parse(imported[key])); }
             });
-            document.getElementById('meals').innerHTML = html;
-            calc();
-        }
+            await batch.commit();
+            setSyncStatus('불러오기 완료 ✅');
+            alert('✅ 완료!'); location.reload();
+        } catch(e) { alert('❌ 파일 오류'); }
+    };
+    reader.readAsText(file);
+};
 
-        function calc() {
-            if (!data || !data.meals) return;
-            let c = 0, p = 0;
-            data.meals.forEach(meal => {
-                const calEl = document.getElementById('cal_' + meal.id);
-                const proEl = document.getElementById('pro_' + meal.id);
-                if (calEl) c += parseFloat(calEl.value) || 0;
-                if (proEl) p += parseFloat(proEl.value) || 0;
-            });
-            
-            const calSpan = document.getElementById('totalCal');
-            const proSpan = document.getElementById('totalPro');
-            if (calSpan) calSpan.textContent = Math.round(c);
-            if (proSpan) proSpan.textContent = p.toFixed(1);
+async function loadWeekly() {
+    const d = new Date(currentDate);
+    const dow = d.getDay();
+    const monday = new Date(new Date(currentDate).setDate(d.getDate() - dow + (dow===0?-6:1)));
+    const dates = Array.from({length:7}, (_,i) => { const x=new Date(monday); x.setDate(x.getDate()+i); return x.toISOString().split('T')[0]; });
+    const dayData = await fetchDateRange(dates);
+    const days = ['월','화','수','목','금','토','일'];
+    let html = ''; const calData=[], proData=[], labels=[];
+    dates.forEach((dateStr, i) => {
+        const s = dayData[dateStr]; let c=0,p=0;
+        if (s.meals) s.meals.forEach(m => { c+=m.cal||0; p+=m.pro||0; });
+        const dObj = new Date(dateStr);
+        const dayName = days[dObj.getDay()===0?6:dObj.getDay()-1];
+        labels.push(`${dObj.getMonth()+1}/${dObj.getDate()} ${dayName}`);
+        calData.push(c); proData.push(p);
+        html += `<tr><td>${dayName} ${s.exercise?'🏋🏻‍♀️':''}</td><td>${Math.round(c)}</td><td>${p.toFixed(1)}</td></tr>`;
+    });
+    document.getElementById('weeklyTable').innerHTML = html;
+    const ctx = document.getElementById('weeklyChart').getContext('2d');
+    if (window.weeklyChartInstance) window.weeklyChartInstance.destroy();
+    Chart.register(ChartDataLabels);
+    window.weeklyChartInstance = new Chart(ctx, {
+        type:'line', data:{ labels, datasets:[
+            {data:calData,borderColor:'#f87171',borderWidth:2,fill:false,pointRadius:4,pointBackgroundColor:'#f87171',pointBorderColor:'#fff',pointBorderWidth:2,yAxisID:'y',tension:0.4,datalabels:{color:'#f87171',display:true,font:{weight:'bold',size:10}}},
+            {data:proData,borderColor:'#60a5fa',borderWidth:2,fill:false,pointRadius:4,pointBackgroundColor:'#60a5fa',pointBorderColor:'#fff',pointBorderWidth:2,yAxisID:'y1',tension:0.4,datalabels:{color:'#60a5fa',display:true,font:{weight:'bold',size:10}}},
+            {data:[1800,1800,1800,1800,1800,1800,1800],borderColor:'#f87171',borderDash:[8,4],borderWidth:2,fill:false,pointRadius:0,yAxisID:'y',datalabels:{display:false}},
+            {data:[120,120,120,120,120,120,120],borderColor:'#60a5fa',borderDash:[8,4],borderWidth:2,fill:false,pointRadius:0,yAxisID:'y1',datalabels:{display:false}}
+        ]},
+        options:{ responsive:true, plugins:{ legend:{display:false}, datalabels:{display:true,font:{size:11,weight:'bold'},align:'top',offset:5} },
+            scales:{ y:{type:'linear',position:'left',ticks:{callback:()=>''},min:0,max:2200}, y1:{type:'linear',position:'right',ticks:{callback:()=>''},grid:{drawOnChartArea:false},min:0,max:180} } }
+    });
+}
 
-            // 칼로리: 목표 1800
-            const calDiff = Math.round(c - 1800);
-            const calDiffEl = document.getElementById('calDiff');
-            if (calDiffEl) {
-                const calColor = c < 1800 ? 'stat-green' : 'stat-red';
-                const calSign = calDiff >= 0 ? '+' : '';
-                calDiffEl.className = 'stat-diff ' + calColor;
-                calDiffEl.textContent = calSign + calDiff;
-            }
+function loadMonthly() { loadMonthlyCalendar(); }
+window.loadMonthly = loadMonthly;
 
-            // 단백질: 목표 120
-            const proDiff = Math.round((p - 120) * 10) / 10;
-            const proDiffEl = document.getElementById('proDiff');
-            if (proDiffEl) {
-                const proColor = p < 120 ? 'stat-red' : 'stat-green';
-                const proSign = proDiff >= 0 ? '+' : '';
-                proDiffEl.className = 'stat-diff ' + proColor;
-                proDiffEl.textContent = proSign + proDiff;
-            }
+window.switchMonthlyView = (view) => {
+    document.getElementById('calendarView').style.display = view==='calendar'?'block':'none';
+    document.getElementById('graphView').style.display = view==='graph'?'block':'none';
+    document.getElementById('calendarViewBtn').style.cssText = view==='calendar'?'background:#667eea;color:white':'background:#f0f0f0;color:#667eea';
+    document.getElementById('graphViewBtn').style.cssText = view==='graph'?'background:#667eea;color:white':'background:#f0f0f0;color:#667eea';
+    if (view==='graph') loadMonthlyGraph('1m');
+};
 
-            // 배경색 변경
-            const calStat = document.getElementById('calStat');
-            const proStat = document.getElementById('proStat');
-            if (calStat) {
-                calStat.style.background = 'rgba(255, 255, 255, 0.15)';
-            }
-            if (proStat) {
-                proStat.style.background = 'rgba(255, 255, 255, 0.15)';
-            }
-        }
+async function loadMonthlyCalendar() {
+    const year = new Date(currentDate).getFullYear();
+    const month = new Date(currentDate).getMonth();
+    const lastDay = new Date(year, month+1, 0).getDate();
+    const firstDow = new Date(year, month, 1).getDay();
+    const dates = makeDateList(
+        `${year}-${String(month+1).padStart(2,'0')}-01`,
+        `${year}-${String(month+1).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`
+    );
+    const dayData = await fetchDateRange(dates);
+    let html = `<div style="margin-bottom:15px;text-align:center;font-weight:bold;">${month+1}월</div>`;
+    html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;">';
+    ['일','월','화','수','목','금','토'].forEach(d => { html += `<div style="text-align:center;font-weight:600;font-size:12px;padding:8px;">${d}</div>`; });
+    for (let i=0;i<firstDow;i++) html += '<div style="min-height:80px;"></div>';
+    for (let day=1;day<=lastDay;day++) {
+        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const s = dayData[dateStr]||{meals:[]}; let c=0,p=0;
+        if (s.meals) s.meals.forEach(m=>{c+=m.cal||0;p+=m.pro||0;});
+        html += `<div style="border:1px solid #e0e0e0;border-radius:8px;padding:8px;min-height:80px;font-size:11px;">
+            <div style="font-weight:600;margin-bottom:4px;">${day}</div>
+            <div style="color:#f87171;font-weight:600;">${c>0?Math.round(c):''}</div>
+            <div style="color:#60a5fa;font-weight:600;">${p>0?p.toFixed(1)+'g':''}</div>
+        </div>`;
+    }
+    html += '</div>';
+    document.getElementById('monthlyCalendar').innerHTML = html;
+}
 
-        function addNote(mealId) {
-            const input = document.getElementById('noteInput_' + mealId);
-            const text = input.value.trim();
-            if (text) {
-                const meal = data.meals.find(m => m.id === mealId);
-                if (meal) {
-                    meal.notes.push(text);
-                    input.value = '';
-                    render();
-                }
-            }
-        }
+window.loadMonthlyGraph = async (period) => {
+    document.querySelectorAll('[onclick*="loadMonthlyGraph"]').forEach(b=>{b.style.background='#f0f0f0';b.style.color='#667eea';});
+    const ab = document.querySelector(`[onclick="loadMonthlyGraph('${period}')"]`);
+    if (ab) { ab.style.background='#667eea'; ab.style.color='white'; }
+    const today = new Date(currentDate);
+    const ms = {1:7,2:30,3:60,4:90,5:180,6:365}; // unused
+    const daysMap = {'1w':7,'1m':30,'2m':60,'3m':90,'6m':180,'12m':365};
+    const startDate = new Date(today.getTime() - (daysMap[period]||30)*86400000);
+    const dates = makeDateList(startDate.toISOString().split('T')[0], currentDate);
+    const dayData = await fetchDateRange(dates);
+    const showLabels = period==='1w'||period==='1m';
+    const calData=[], proData=[], labels=[];
+    dates.forEach((dateStr,idx) => {
+        const s = dayData[dateStr]||{meals:[]}; let c=0,p=0;
+        if (s.meals) s.meals.forEach(m=>{c+=m.cal||0;p+=m.pro||0;});
+        const d = new Date(dateStr); const dom = d.getDate(); const isToday = dateStr===currentDate;
+        let label='';
+        if (period==='1w') label=`${d.getMonth()+1}/${dom}`;
+        else if (period==='1m') { if(idx%3===0||isToday) label=`${d.getMonth()+1}/${dom}`; }
+        else if (period==='2m') { if(dom===1||dom===15||isToday) label=`${d.getMonth()+1}/${dom}`; }
+        else { if(dom===1||isToday) label=`${d.getMonth()+1}/${dom}`; }
+        labels.push(label); calData.push(c); proData.push(p);
+    });
+    const ctx = document.getElementById('monthlyGraphChart').getContext('2d');
+    if (window.monthlyGraphInstance) window.monthlyGraphInstance.destroy();
+    Chart.register(ChartDataLabels);
+    window.monthlyGraphInstance = new Chart(ctx, {
+        type:'line', data:{ labels, datasets:[
+            {data:calData,borderColor:'#f87171',borderWidth:2,fill:false,pointRadius:3,pointBackgroundColor:'#f87171',yAxisID:'y',tension:0.4,datalabels:{color:'#f87171',display:showLabels,font:{weight:'bold',size:9}}},
+            {data:proData,borderColor:'#60a5fa',borderWidth:2,fill:false,pointRadius:3,pointBackgroundColor:'#60a5fa',yAxisID:'y1',tension:0.4,datalabels:{color:'#60a5fa',display:showLabels,font:{weight:'bold',size:9}}},
+            {data:Array(calData.length).fill(1800),borderColor:'#f87171',borderDash:[8,4],borderWidth:1.5,fill:false,pointRadius:0,yAxisID:'y',datalabels:{display:false}},
+            {data:Array(proData.length).fill(120),borderColor:'#60a5fa',borderDash:[8,4],borderWidth:1.5,fill:false,pointRadius:0,yAxisID:'y1',datalabels:{display:false}}
+        ]},
+        options:{ responsive:true, plugins:{legend:{display:false}},
+            scales:{ x:{ticks:{font:{size:10}}}, y:{type:'linear',position:'left',ticks:{callback:()=>''},min:0,max:2200}, y1:{type:'linear',position:'right',ticks:{callback:()=>''},grid:{drawOnChartArea:false},min:0,max:180} } }
+    });
+};
 
-        function delNote(mealId, idx) {
-            const meal = data.meals.find(m => m.id === mealId);
-            if (meal) {
-                meal.notes.splice(idx, 1);
-                render();
-            }
-        }
-
-        function editNote(mealId, idx) {
-            const meal = data.meals.find(m => m.id === mealId);
-            if (meal) {
-                const newText = prompt('수정:', meal.notes[idx]);
-                if (newText !== null && newText.trim()) {
-                    meal.notes[idx] = newText.trim();
-                    render();
-                }
-            }
-        }
-
-        function addMeal() {
-            const emojis = ['🥤','🍪','🍰','🧁','🍩','☕','🥛','🍫'];
-            const emoji = emojis[Math.floor(Math.random() * emojis.length)];
-            const id = Math.max(0, ...data.meals.map(m => m.id)) + 1;
-            data.meals.push({id: id, name: emoji + ' 간식', fixed: false, cal: '', pro: '', notes: []});
-            render();
-        }
-
-        function delMeal(id) {
-            data.meals = data.meals.filter(m => m.id !== id);
-            render();
-        }
-
-        function moveUp(idx) {
-            if (idx > 0 && !data.meals[idx].fixed) {
-                [data.meals[idx], data.meals[idx-1]] = [data.meals[idx-1], data.meals[idx]];
-                render();
-            }
-        }
-
-        function moveDown(idx) {
-            if (idx < data.meals.length - 1 && !data.meals[idx].fixed) {
-                [data.meals[idx], data.meals[idx+1]] = [data.meals[idx+1], data.meals[idx]];
-                render();
-            }
-        }
-
-        function updateExercise() {
-            data.exercise = document.getElementById('exerciseCheck').checked;
-        }
-
-        function saveMeals() {
-            data.exercise = document.getElementById('exerciseCheck').checked;
-            data.meals.forEach(meal => {
-                meal.cal = parseFloat(document.getElementById('cal_' + meal.id).value) || 0;
-                meal.pro = parseFloat(document.getElementById('pro_' + meal.id).value) || 0;
-                const nameEl = document.getElementById('name_' + meal.id);
-                if (nameEl && !meal.fixed) meal.name = nameEl.value;
-            });
-            localStorage.setItem('cal_' + currentDate, JSON.stringify(data));
-            alert('저장됨! ✅');
-            loadWeekly();
-            loadMonthly();
-        }
-
-        function prevDay() {
-            const d = new Date(currentDate);
-            d.setDate(d.getDate() - 1);
-            currentDate = d.toISOString().split('T')[0];
-            load();
-        }
-
-        function nextDay() {
-            const d = new Date(currentDate);
-            d.setDate(d.getDate() + 1);
-            currentDate = d.toISOString().split('T')[0];
-            load();
-        }
-
-        function todayDay() {
-            currentDate = new Date().toISOString().split('T')[0];
-            load();
-        }
-
-        function changeDate() {
-            currentDate = document.getElementById('dateInput').value;
-            load();
-        }
-
-        function switchTab(tab) {
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById(tab).classList.add('active');
-            event.target.classList.add('active');
-            if (tab === 'weekly') loadWeekly();
-            if (tab === 'monthly') loadMonthly();
-        }
-
-        function loadWeekly() {
-            const d = new Date(currentDate);
-            const dayOfWeek = d.getDay();
-            const diff = d.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-            const monday = new Date(d.setDate(diff));
-            
-            let html = '';
-            const days = ['월','화','수','목','금','토','일'];
-            const calData = [], proData = [], dateLabels = [];
-            
-            for (let i = 0; i < 7; i++) {
-                const date = new Date(monday);
-                date.setDate(date.getDate() + i);
-                const dateStr = date.toISOString().split('T')[0];
-                const month = date.getMonth() + 1;
-                const day = date.getDate();
-                const dayOfWeek = days[date.getDay() === 0 ? 6 : date.getDay() - 1];
-                dateLabels.push(`${month}/${day} ${dayOfWeek}`);
-                
-                const stored = JSON.parse(localStorage.getItem('cal_' + dateStr) || '{"exercise":false,"meals":[]}');
-                let c = 0, p = 0;
-                if (stored.meals) {
-                    stored.meals.forEach(m => { c += m.cal || 0; p += m.pro || 0; });
-                }
-                calData.push(c);
-                proData.push(p);
-                const exMark = stored.exercise ? '🏋🏻‍♀️' : '';
-                html += '<tr><td>' + dayOfWeek + ' ' + exMark + '</td><td>' + Math.round(c) + '</td><td>' + p.toFixed(1) + '</td></tr>';
-            }
-            document.getElementById('weeklyTable').innerHTML = html;
-            
-            // Chart.js 그래프
-            const ctx = document.getElementById('weeklyChart').getContext('2d');
-            if (window.weeklyChartInstance) {
-                window.weeklyChartInstance.destroy();
-            }
-            
-            Chart.register(ChartDataLabels);
-            
-            window.weeklyChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: dateLabels,
-                    datasets: [
-                        {
-                            data: calData,
-                            borderColor: '#f87171',
-                            backgroundColor: 'rgba(248, 113, 113, 0.1)',
-                            borderWidth: 2,
-                            fill: false,
-                            pointRadius: 4,
-                            pointBackgroundColor: '#f87171',
-                            pointBorderColor: '#fff',
-                            pointBorderWidth: 2,
-                            yAxisID: 'y',
-                            tension: 0.4,
-                            datalabels: { color: '#f87171', display: true, font: { weight: 'bold', size: 10 } }
-                        },
-                        {
-                            data: proData,
-                            borderColor: '#60a5fa',
-                            backgroundColor: 'rgba(96, 165, 250, 0.1)',
-                            borderWidth: 2,
-                            fill: false,
-                            pointRadius: 4,
-                            pointBackgroundColor: '#60a5fa',
-                            pointBorderColor: '#fff',
-                            pointBorderWidth: 2,
-                            yAxisID: 'y1',
-                            tension: 0.4,
-                            datalabels: { color: '#60a5fa', display: true, font: { weight: 'bold', size: 10 } }
-                        },
-                        {
-                            data: [1800, 1800, 1800, 1800, 1800, 1800, 1800],
-                            borderColor: '#f87171',
-                            borderDash: [8, 4],
-                            borderWidth: 2,
-                            fill: false,
-                            pointRadius: 0,
-                            yAxisID: 'y',
-                            datalabels: { display: false }
-                        },
-                        {
-                            data: [120, 120, 120, 120, 120, 120, 120],
-                            borderColor: '#60a5fa',
-                            borderDash: [8, 4],
-                            borderWidth: 2,
-                            fill: false,
-                            pointRadius: 0,
-                            yAxisID: 'y1',
-                            datalabels: { display: false }
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: { display: false },
-                        datalabels: {
-                            display: true,
-                            font: { size: 11, weight: 'bold' },
-                            color: '#333',
-                            align: 'top',
-                            offset: 5
-                        },
-                        afterDraw: {
-                            id: 'afterDraw',
-                            afterDraw(chart) {
-                                const { ctx, chartArea, scales } = chart;
-                                const yScale = scales.y;
-                                const y1Scale = scales.y1;
-                                const rightEdge = chartArea.right + 15;
-                                
-                                // 칼로리 목표값 (우측)
-                                const calY = yScale.getPixelForValue(1800);
-                                ctx.fillStyle = '#f87171';
-                                ctx.font = 'bold 12px Pretendard';
-                                ctx.textAlign = 'left';
-                                ctx.fillText('1800', rightEdge, calY + 4);
-                                
-                                // 단백질 목표값 (우측)
-                                const proY = y1Scale.getPixelForValue(120);
-                                ctx.fillStyle = '#60a5fa';
-                                ctx.font = 'bold 12px Pretendard';
-                                ctx.fillText('120', rightEdge, proY + 4);
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            ticks: { color: '#f87171', callback: function() { return ''; } },
-                            min: 0,
-                            max: 2200
-                        },
-                        y1: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                            ticks: { color: '#60a5fa', callback: function() { return ''; } },
-                            grid: { drawOnChartArea: false },
-                            min: 0,
-                            max: 180
-                        }
-                    }
-                }
-            });
-        }
-
-        function loadMonthly() {
-            loadMonthlyCalendar();
-        }
-        
-        // 기존 코드 (미사용)
-        function switchMonthlyView(view) {
-            document.getElementById('calendarView').style.display = view === 'calendar' ? 'block' : 'none';
-            document.getElementById('graphView').style.display = view === 'graph' ? 'block' : 'none';
-            
-            document.getElementById('calendarViewBtn').style.background = view === 'calendar' ? '#667eea' : '#f0f0f0';
-            document.getElementById('calendarViewBtn').style.color = view === 'calendar' ? 'white' : '#667eea';
-            document.getElementById('graphViewBtn').style.background = view === 'graph' ? '#667eea' : '#f0f0f0';
-            document.getElementById('graphViewBtn').style.color = view === 'graph' ? 'white' : '#667eea';
-            
-            if (view === 'graph') {
-                loadMonthlyGraph('1w');
-            }
-        }
-        
-        function loadMonthlyCalendar() {
-            const year = new Date(currentDate).getFullYear();
-            const month = new Date(currentDate).getMonth();
-            const firstDay = new Date(year, month, 1);
-            const lastDay = new Date(year, month + 1, 0);
-            const daysInMonth = lastDay.getDate();
-            const startDate = firstDay.getDay();
-            
-            let html = '<div style="margin-bottom: 15px; text-align: center; font-weight: bold;">' + (month + 1) + '월</div>';
-            html += '<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px;">';
-            
-            const dayNames = ['일','월','화','수','목','금','토'];
-            dayNames.forEach(d => {
-                html += '<div style="text-align: center; font-weight: 600; font-size: 12px; padding: 8px;">' + d + '</div>';
-            });
-            
-            // 빈 칸
-            for (let i = 0; i < startDate; i++) {
-                html += '<div style="min-height: 80px;"></div>';
-            }
-            
-            // 날짜
-            for (let day = 1; day <= daysInMonth; day++) {
-                const dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
-                const stored = JSON.parse(localStorage.getItem('cal_' + dateStr) || '{"exercise":false,"meals":[]}');
-                let c = 0, p = 0;
-                if (stored.meals) {
-                    stored.meals.forEach(m => { c += m.cal || 0; p += m.pro || 0; });
-                }
-                html += '<div style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 8px; min-height: 80px; font-size: 11px;">';
-                html += '<div style="font-weight: 600; margin-bottom: 4px;">' + day + '</div>';
-                html += '<div style="color: #f87171; font-weight: 600;">' + (c > 0 ? Math.round(c) : '') + '</div>';
-                html += '<div style="color: #60a5fa; font-weight: 600;">' + (p > 0 ? p.toFixed(1) + 'g' : '') + '</div>';
-                html += '</div>';
-            }
-            
-            html += '</div>';
-            document.getElementById('monthlyCalendar').innerHTML = html;
-        }
-        
-        function loadMonthlyGraph(period) {
-            // 버튼 스타일 업데이트
-            document.querySelectorAll('[onclick*="loadMonthlyGraph"]').forEach(btn => {
-                btn.style.background = '#f0f0f0';
-                btn.style.color = '#667eea';
-            });
-            const activeBtn = document.querySelector(`[onclick="loadMonthlyGraph('${period}')"]`);
-            if (activeBtn) {
-                activeBtn.style.background = '#667eea';
-                activeBtn.style.color = 'white';
-            }
-            
-            const today = new Date(currentDate);
-            let startDate, endDate = new Date(today);
-            
-            switch(period) {
-                case '1w': startDate = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000); break;
-                case '1m': startDate = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000); break;
-                case '2m': startDate = new Date(today.getTime() - 60 * 24 * 60 * 60 * 1000); break;
-                case '3m': startDate = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000); break;
-                case '6m': startDate = new Date(today.getTime() - 180 * 24 * 60 * 60 * 1000); break;
-                case '12m': startDate = new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000); break;
-                default: startDate = new Date(2020, 0, 1);
-            }
-            
-            let calData = [], proData = [], labels = [];
-            const showDataLabels = period === '1w' || period === '1m';
-            
-            for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-                const dateStr = d.toISOString().split('T')[0];
-                const stored = JSON.parse(localStorage.getItem('cal_' + dateStr) || '{"exercise":false,"meals":[]}');
-                let c = 0, p = 0;
-                if (stored.meals) {
-                    stored.meals.forEach(m => { c += m.cal || 0; p += m.pro || 0; });
-                }
-                
-                // 구간별 라벨 표시
-                let labelToShow = '';
-                const isToday = dateStr === currentDate;
-                const dayOfMonth = d.getDate();
-                
-                if (period === '1w') {
-                    // 1주일: 모든 날짜
-                    labelToShow = d.getMonth() + 1 + '/' + dayOfMonth;
-                } else if (period === '1m') {
-                    // 1개월: 3일 간격
-                    if (labels.length % 3 === 0 || isToday) labelToShow = d.getMonth() + 1 + '/' + dayOfMonth;
-                } else if (period === '2m') {
-                    // 2개월: 각 달 1일, 15일 + 오늘
-                    if (dayOfMonth === 1 || dayOfMonth === 15 || isToday) {
-                        labelToShow = d.getMonth() + 1 + '/' + dayOfMonth;
-                    }
-                } else {
-                    // 3개월, 6개월, 12개월, 전체: 매달 1일 + 오늘
-                    if (dayOfMonth === 1 || isToday) {
-                        labelToShow = d.getMonth() + 1 + '/' + dayOfMonth;
-                    }
-                }
-                labels.push(labelToShow);
-                
-                calData.push(c);
-                proData.push(p);
-            }
-            
-            const ctx = document.getElementById('monthlyGraphChart').getContext('2d');
-            if (window.monthlyGraphInstance) {
-                window.monthlyGraphInstance.destroy();
-            }
-            
-            Chart.register(ChartDataLabels);
-            
-            // period별 X축 설정
-            const xTicksConfig = {
-                font: { size: 10 },
-                minRotation: 0,
-                maxRotation: 0,
-                autoSkip: period === 'all'  // 전체만 true (자동 간격)
-            };
-            
-            window.monthlyGraphInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            data: calData,
-                            borderColor: '#f87171',
-                            backgroundColor: 'rgba(248, 113, 113, 0.1)',
-                            borderWidth: 2,
-                            fill: false,
-                            pointRadius: 3,
-                            pointBackgroundColor: '#f87171',
-                            yAxisID: 'y',
-                            tension: 0.4,
-                            datalabels: { color: '#f87171', display: showDataLabels, font: { weight: 'bold', size: 9 } }
-                        },
-                        {
-                            data: proData,
-                            borderColor: '#60a5fa',
-                            backgroundColor: 'rgba(96, 165, 250, 0.1)',
-                            borderWidth: 2,
-                            fill: false,
-                            pointRadius: 3,
-                            pointBackgroundColor: '#60a5fa',
-                            yAxisID: 'y1',
-                            tension: 0.4,
-                            datalabels: { color: '#60a5fa', display: showDataLabels, font: { weight: 'bold', size: 9 } }
-                        },
-                        {
-                            data: Array(calData.length).fill(1800),
-                            borderColor: '#f87171',
-                            borderDash: [8, 4],
-                            borderWidth: 1.5,
-                            fill: false,
-                            pointRadius: 0,
-                            yAxisID: 'y',
-                            datalabels: { display: false }
-                        },
-                        {
-                            data: Array(proData.length).fill(120),
-                            borderColor: '#60a5fa',
-                            borderDash: [8, 4],
-                            borderWidth: 1.5,
-                            fill: false,
-                            pointRadius: 0,
-                            yAxisID: 'y1',
-                            datalabels: { display: false }
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: { 
-                        legend: { display: false },
-                        afterDraw: {
-                            id: 'afterDraw',
-                            afterDraw(chart) {
-                                const { ctx, chartArea, scales } = chart;
-                                const yScale = scales.y;
-                                const y1Scale = scales.y1;
-                                const rightEdge = chartArea.right + 15;
-                                
-                                // 칼로리 목표값 (우측)
-                                const calY = yScale.getPixelForValue(1800);
-                                ctx.fillStyle = '#f87171';
-                                ctx.font = 'bold 12px Pretendard';
-                                ctx.textAlign = 'left';
-                                ctx.fillText('1800', rightEdge, calY + 4);
-                                
-                                // 단백질 목표값 (우측)
-                                const proY = y1Scale.getPixelForValue(120);
-                                ctx.fillStyle = '#60a5fa';
-                                ctx.font = 'bold 12px Pretendard';
-                                ctx.fillText('120', rightEdge, proY + 4);
-                            }
-                        }
-                    },
-                    scales: {
-                        x: { ticks: xTicksConfig },
-                        y: { type: 'linear', position: 'left', ticks: { color: '#f87171', callback: function() { return ''; } }, min: 0, max: 2200 },
-                        y1: { type: 'linear', position: 'right', ticks: { color: '#60a5fa', callback: function() { return ''; } }, grid: { drawOnChartArea: false }, min: 0, max: 180 }
-                    }
-                }
-            });
-        }
-
-        load();
-    </script>
+// 초기화
+async function init() {
+    try {
+        await migrateFromLocalStorage();
+        await load();
+    } catch(e) {
+        console.error(e);
+        setSyncStatus('연결 오류 ❌');
+    } finally {
+        document.getElementById('loadingOverlay').style.display = 'none';
+    }
+}
+init();
+</script>
 </body>
 </html>
