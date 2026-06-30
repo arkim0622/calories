@@ -121,6 +121,7 @@
         </div>
 
         <div id="weekly" class="tab-content">
+            <div id="weekTitle" style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:12px;"></div>
             <table class="table">
                 <thead><tr><th>날짜</th><th>칼로리</th><th>단백질</th></tr></thead>
                 <tbody id="weeklyTable"></tbody>
@@ -181,6 +182,8 @@ function shiftDate(dateStr, delta) {
 
 let currentDate = todayStr();
 let data = {};
+let calYear, calMonth; // 월간 캘린더가 현재 보고 있는 연/월
+let weekRefDate; // 주간 탭이 현재 보고 있는 주의 기준 날짜
 
 function setSyncStatus(msg) {
     const el = document.getElementById('syncStatus');
@@ -387,11 +390,20 @@ window.importData = (event) => {
     reader.readAsText(file);
 };
 
-async function loadWeekly() {
-    const d = new Date(currentDate);
+function loadWeekly() {
+    weekRefDate = currentDate;
+    renderWeek();
+}
+window.prevWeek = () => { weekRefDate = shiftDate(weekRefDate, -7); renderWeek(); };
+window.nextWeek = () => { weekRefDate = shiftDate(weekRefDate, 7); renderWeek(); };
+
+async function renderWeek() {
+    const d = new Date(weekRefDate);
     const dow = d.getDay();
-    const monday = new Date(new Date(currentDate).setDate(d.getDate() - dow + (dow===0?-6:1)));
+    const monday = new Date(new Date(weekRefDate).setDate(d.getDate() - dow + (dow===0?-6:1)));
     const dates = Array.from({length:7}, (_,i) => { const x=new Date(monday); x.setDate(x.getDate()+i); return x.toISOString().split('T')[0]; });
+    const mon = new Date(dates[0]); const sun = new Date(dates[6]);
+    document.getElementById('weekTitle').innerHTML = `<button onclick="prevWeek()" class="btn" style="background:#f0f0f0;color:#667eea;padding:4px 14px;font-size:16px;">‹</button><span style="font-weight:bold;">${mon.getMonth()+1}/${mon.getDate()} ~ ${sun.getMonth()+1}/${sun.getDate()}</span><button onclick="nextWeek()" class="btn" style="background:#f0f0f0;color:#667eea;padding:4px 14px;font-size:16px;">›</button>`;
     const dayData = await fetchDateRange(dates);
     const days = ['월','화','수','목','금','토','일'];
     let html = ''; const calData=[], proData=[], labels=[];
@@ -423,8 +435,15 @@ async function loadWeekly() {
     });
 }
 
-function loadMonthly() { loadMonthlyCalendar(); }
+function loadMonthly() {
+    const d = new Date(currentDate);
+    calYear = d.getFullYear();
+    calMonth = d.getMonth();
+    loadMonthlyCalendar();
+}
 window.loadMonthly = loadMonthly;
+window.prevMonth = () => { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } loadMonthlyCalendar(); };
+window.nextMonth = () => { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } loadMonthlyCalendar(); };
 
 window.switchMonthlyView = (view) => {
     document.getElementById('calendarView').style.display = view==='calendar'?'block':'none';
@@ -435,8 +454,8 @@ window.switchMonthlyView = (view) => {
 };
 
 async function loadMonthlyCalendar() {
-    const year = new Date(currentDate).getFullYear();
-    const month = new Date(currentDate).getMonth();
+    const year = calYear;
+    const month = calMonth;
     const lastDay = new Date(year, month+1, 0).getDate();
     const firstDow = new Date(year, month, 1).getDay();
     const dates = makeDateList(
@@ -444,7 +463,11 @@ async function loadMonthlyCalendar() {
         `${year}-${String(month+1).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`
     );
     const dayData = await fetchDateRange(dates);
-    let html = `<div style="margin-bottom:15px;text-align:center;font-weight:bold;">${month+1}월</div>`;
+    let html = `<div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:15px;">
+        <button onclick="prevMonth()" class="btn" style="background:#f0f0f0;color:#667eea;padding:4px 14px;font-size:16px;">‹</button>
+        <span style="font-weight:bold;">${year}년 ${month+1}월</span>
+        <button onclick="nextMonth()" class="btn" style="background:#f0f0f0;color:#667eea;padding:4px 14px;font-size:16px;">›</button>
+    </div>`;
     html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;">';
     ['일','월','화','수','목','금','토'].forEach(d => { html += `<div style="text-align:center;font-weight:600;font-size:12px;padding:8px;">${d}</div>`; });
     for (let i=0;i<firstDow;i++) html += '<div style="min-height:80px;"></div>';
