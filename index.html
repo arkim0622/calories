@@ -71,8 +71,9 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 15px;
+            gap: 8px;
             margin-bottom: 15px;
+            flex-wrap: wrap;
         }
         .nav-btn {
             background: #f0f0f0;
@@ -82,15 +83,24 @@
             cursor: pointer;
             font-weight: 600;
             color: #667eea;
+            font-size: 13px;
         }
         .nav-btn:active {
             background: #e0e0e0;
         }
+        .nav-btn.today {
+            background: #667eea;
+            color: white;
+        }
         .current-date {
             font-weight: 600;
             color: #333;
-            min-width: 120px;
+            min-width: 130px;
             text-align: center;
+            font-size: 13px;
+        }
+        #dateInput {
+            display: none;
         }
         .meal-section {
             margin-bottom: 12px;
@@ -98,12 +108,37 @@
             background: #f9f9f9;
             border-radius: 10px;
             border-left: 3px solid #667eea;
+            position: relative;
+        }
+        .meal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
         }
         .meal-label {
             font-weight: 600;
             color: #333;
-            margin-bottom: 8px;
             font-size: 13px;
+        }
+        .meal-controls {
+            display: flex;
+            gap: 4px;
+        }
+        .meal-btn {
+            background: #e0e0e0;
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .meal-btn:active {
+            background: #d0d0d0;
         }
         .input-row {
             display: grid;
@@ -132,6 +167,20 @@
             outline: none;
             border-color: #667eea;
             background: #f8f9ff;
+        }
+        .add-snack-btn {
+            padding: 10px;
+            background: #e0e7ff;
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            color: #667eea;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+        .add-snack-btn:active {
+            background: #d0d7ff;
         }
         .button-group {
             display: grid;
@@ -285,12 +334,14 @@
         <div id="today" class="tab-content active">
             <div class="date-nav">
                 <button class="nav-btn" onclick="prevDate()">← 이전</button>
-                <button class="nav-btn" onclick="goToToday()" style="background: #667eea; color: white;">오늘</button>
+                <button class="nav-btn today" onclick="goToToday()">오늘</button>
                 <div class="current-date" id="selectedDate"></div>
-                <input type="date" id="dateInput" onchange="selectDate(this.value)" style="display: none;">
-                <button class="nav-btn" onclick="document.getElementById('dateInput').click()" style="font-size: 16px;">📅</button>
+                <input type="date" id="dateInput" onchange="selectDate(this.value)">
+                <button class="nav-btn" onclick="openCalendar()" style="font-size: 16px;">📅</button>
                 <button class="nav-btn" onclick="nextDate()">다음 →</button>
             </div>
+
+            <button class="add-snack-btn" onclick="addSnack()">+ 간식 추가</button>
 
             <div id="mealInputs"></div>
 
@@ -411,7 +462,7 @@
     <script>
         const TARGET_CAL = 1800;
         const TARGET_PROTEIN = 120;
-        const meals = ['breakfast', 'snack1', 'lunch', 'snack2', 'dinner'];
+        const snackEmojis = ['🥤', '🍪', '🍰', '🧁', '🍩', '☕', '🥛', '🍫', '🍶', '🧃', '🧋', '🍷'];
         let selectedDate = new Date().toISOString().split('T')[0];
         let weeklyChart = null;
         let monthlyChart = null;
@@ -424,24 +475,75 @@
             return `${year}-${month}-${day}`;
         }
 
+        function getMeals() {
+            const meals = JSON.parse(localStorage.getItem(`meals_${selectedDate}`)) || [
+                { id: 'breakfast', emoji: '☀️', name: '아침', fixed: true },
+                { id: 'lunch', emoji: '🌤️', name: '점심', fixed: true },
+                { id: 'dinner', emoji: '🌙', name: '저녁', fixed: true }
+            ];
+            return meals;
+        }
+
+        function saveMeals(meals) {
+            localStorage.setItem(`meals_${selectedDate}`, JSON.stringify(meals));
+        }
+
+        function addSnack() {
+            const meals = getMeals();
+            const randomEmoji = snackEmojis[Math.floor(Math.random() * snackEmojis.length)];
+            const newSnack = {
+                id: `snack_${Date.now()}`,
+                emoji: randomEmoji,
+                name: '간식',
+                fixed: false
+            };
+            meals.splice(meals.length - 1, 0, newSnack);
+            saveMeals(meals);
+            createMealInputs();
+        }
+
+        function deleteSnack(id) {
+            let meals = getMeals();
+            meals = meals.filter(m => m.id !== id);
+            saveMeals(meals);
+            createMealInputs();
+        }
+
+        function moveSnack(id, direction) {
+            const meals = getMeals();
+            const index = meals.findIndex(m => m.id === id);
+            if ((direction === 'up' && index > 0) || (direction === 'down' && index < meals.length - 1)) {
+                const newIndex = direction === 'up' ? index - 1 : index + 1;
+                [meals[index], meals[newIndex]] = [meals[newIndex], meals[index]];
+                saveMeals(meals);
+                createMealInputs();
+            }
+        }
+
         function createMealInputs() {
             const container = document.getElementById('mealInputs');
-            const mealEmojis = { breakfast: '☀️', snack1: '🥤', lunch: '🌤️', snack2: '🍪', dinner: '🌙' };
-            const mealNames = { breakfast: '아침', snack1: '간식1', lunch: '점심', snack2: '간식2', dinner: '저녁' };
+            const meals = getMeals();
             
-            container.innerHTML = meals.map(meal => {
-                const data = JSON.parse(localStorage.getItem(`meal_${selectedDate}_${meal}`)) || { cal: 0, protein: 0 };
+            container.innerHTML = meals.map((meal, idx) => {
+                const data = JSON.parse(localStorage.getItem(`meal_${selectedDate}_${meal.id}`)) || { cal: 0, protein: 0 };
                 return `
                     <div class="meal-section">
-                        <div class="meal-label">${mealEmojis[meal]} ${mealNames[meal]}</div>
+                        <div class="meal-header">
+                            <div class="meal-label">${meal.emoji} ${meal.name}</div>
+                            <div class="meal-controls">
+                                ${!meal.fixed ? `<button class="meal-btn" onclick="moveSnack('${meal.id}', 'up')">↑</button>` : ''}
+                                ${!meal.fixed ? `<button class="meal-btn" onclick="moveSnack('${meal.id}', 'down')">↓</button>` : ''}
+                                ${!meal.fixed ? `<button class="meal-btn" onclick="deleteSnack('${meal.id}')">✕</button>` : ''}
+                            </div>
+                        </div>
                         <div class="input-row">
                             <div class="input-group">
                                 <label class="input-label">칼로리</label>
-                                <input type="number" id="${meal}_cal" class="meal-input" value="${data.cal || ''}" placeholder="입력">
+                                <input type="number" id="${meal.id}_cal" class="meal-input" value="${data.cal || ''}" placeholder="입력">
                             </div>
                             <div class="input-group">
                                 <label class="input-label">단백질(g)</label>
-                                <input type="number" id="${meal}_protein" class="meal-input" value="${data.protein || ''}" placeholder="입력" step="0.1">
+                                <input type="number" id="${meal.id}_protein" class="meal-input" value="${data.protein || ''}" placeholder="입력" step="0.1">
                             </div>
                         </div>
                     </div>
@@ -482,17 +584,21 @@
             createMealInputs();
         }
 
+        function openCalendar() {
+            document.getElementById('dateInput').click();
+        }
+
         function selectDate(dateStr) {
             selectedDate = formatDate(dateStr);
-            document.getElementById('dateInput').value = selectedDate;
             createMealInputs();
         }
 
         function calculateTotals() {
+            const meals = getMeals();
             let totalCal = 0, totalProtein = 0;
             meals.forEach(meal => {
-                const cal = parseFloat(document.getElementById(meal + '_cal').value) || 0;
-                const protein = parseFloat(document.getElementById(meal + '_protein').value) || 0;
+                const cal = parseFloat(document.getElementById(meal.id + '_cal').value) || 0;
+                const protein = parseFloat(document.getElementById(meal.id + '_protein').value) || 0;
                 totalCal += cal;
                 totalProtein += protein;
             });
@@ -518,13 +624,14 @@
         }
 
         function saveData() {
+            const meals = getMeals();
             let totalCal = 0, totalProtein = 0;
             meals.forEach(meal => {
-                const cal = parseFloat(document.getElementById(meal + '_cal').value) || 0;
-                const protein = parseFloat(document.getElementById(meal + '_protein').value) || 0;
+                const cal = parseFloat(document.getElementById(meal.id + '_cal').value) || 0;
+                const protein = parseFloat(document.getElementById(meal.id + '_protein').value) || 0;
                 totalCal += cal;
                 totalProtein += protein;
-                localStorage.setItem(`meal_${selectedDate}_${meal}`, JSON.stringify({ cal, protein }));
+                localStorage.setItem(`meal_${selectedDate}_${meal.id}`, JSON.stringify({ cal, protein }));
             });
 
             localStorage.setItem(`daily_${selectedDate}`, JSON.stringify({ totalCal, totalProtein }));
@@ -534,9 +641,10 @@
         }
 
         function clearInputs() {
+            const meals = getMeals();
             meals.forEach(meal => {
-                document.getElementById(meal + '_cal').value = '';
-                document.getElementById(meal + '_protein').value = '';
+                document.getElementById(meal.id + '_cal').value = '';
+                document.getElementById(meal.id + '_protein').value = '';
             });
             calculateTotals();
         }
@@ -750,13 +858,13 @@
             }).join('');
         }
 
-        // 초기화
+        // 6/29 초기화
         localStorage.setItem(`daily_2026-06-29`, JSON.stringify({ totalCal: 1718, totalProtein: 95.3 }));
         localStorage.setItem(`meal_2026-06-29_breakfast`, JSON.stringify({ cal: 329, protein: 12 }));
-        localStorage.setItem(`meal_2026-06-29_snack1`, JSON.stringify({ cal: 280, protein: 23.5 }));
         localStorage.setItem(`meal_2026-06-29_lunch`, JSON.stringify({ cal: 239, protein: 21 }));
-        localStorage.setItem(`meal_2026-06-29_snack2`, JSON.stringify({ cal: 98, protein: 1.5 }));
         localStorage.setItem(`meal_2026-06-29_dinner`, JSON.stringify({ cal: 772, protein: 37.3 }));
+        localStorage.setItem(`meal_2026-06-29_snack_1719669600000`, JSON.stringify({ cal: 280, protein: 23.5 }));
+        localStorage.setItem(`meal_2026-06-29_snack_1719669600001`, JSON.stringify({ cal: 98, protein: 1.5 }));
 
         createMealInputs();
     </script>
