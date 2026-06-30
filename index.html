@@ -61,10 +61,6 @@
             <button class="btn btn-nav" onclick="nextDay()">다음 →</button>
         </div>
 
-        <button class="btn-add" onclick="addMeal()">+ 항목 추가</button>
-
-        <div id="meals"></div>
-
         <div class="stats">
             <div class="stat-row">
                 <div class="stat">
@@ -77,6 +73,10 @@
                 </div>
             </div>
         </div>
+
+        <button class="btn-add" onclick="addMeal()">+ 항목 추가</button>
+
+        <div id="meals"></div>
 
         <div class="buttons">
             <button class="btn-save" onclick="save()">💾 저장</button>
@@ -146,6 +146,7 @@
                 meal.notes.forEach((note, nidx) => {
                     html += '<div class="note-item">';
                     html += '<div class="note-text">' + note + '</div>';
+                    html += '<button class="note-del" onclick="editNote(' + meal.id + ',' + nidx + ')">수정</button>';
                     html += '<button class="note-del" onclick="delNote(' + meal.id + ',' + nidx + ')">✕</button>';
                     html += '</div>';
                 });
@@ -189,6 +190,17 @@
             if (meal) {
                 meal.notes.splice(idx, 1);
                 render();
+            }
+        }
+
+        function editNote(mealId, idx) {
+            const meal = data.meals.find(m => m.id === mealId);
+            if (meal) {
+                const newText = prompt('수정:', meal.notes[idx]);
+                if (newText !== null && newText.trim()) {
+                    meal.notes[idx] = newText.trim();
+                    render();
+                }
             }
         }
 
