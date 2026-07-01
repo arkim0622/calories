@@ -475,7 +475,8 @@ async function loadMonthlyCalendar() {
         const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
         const s = dayData[dateStr]||{meals:[]}; let c=0,p=0;
         if (s.meals) s.meals.forEach(m=>{c+=m.cal||0;p+=m.pro||0;});
-        html += `<div style="border:1px solid #e0e0e0;border-radius:8px;padding:8px;min-height:80px;font-size:11px;">
+        const exBg = s.exercise ? 'background:rgba(102,126,234,0.09);border:1px solid rgba(102,126,234,0.25);' : 'border:1px solid #e0e0e0;';
+        html += `<div style="${exBg}border-radius:8px;padding:8px;min-height:80px;font-size:11px;">
             <div style="font-weight:600;margin-bottom:4px;">${day}${s.exercise ? ' <span style="font-size:10px;">🏋🏻‍♀️</span>' : ''}</div>
             <div style="color:#f87171;font-weight:600;">${c>0?Math.round(c):''}</div>
             <div style="color:#60a5fa;font-weight:600;">${p>0?p.toFixed(1)+'g':''}</div>
