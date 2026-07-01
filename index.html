@@ -412,7 +412,7 @@ async function renderWeek() {
         if (s.meals) s.meals.forEach(m => { c+=m.cal||0; p+=m.pro||0; });
         const dObj = new Date(dateStr);
         const dayName = days[dObj.getDay()===0?6:dObj.getDay()-1];
-        labels.push(`${dObj.getMonth()+1}/${dObj.getDate()} ${dayName}`);
+        labels.push(`${dObj.getMonth()+1}/${dObj.getDate()} ${dayName}${s.exercise ? ' 🏋🏻‍♀️' : ''}`);
         calData.push(c); proData.push(p);
         html += `<tr><td>${dayName} ${s.exercise?'🏋🏻‍♀️':''}</td><td>${Math.round(c)}</td><td>${p.toFixed(1)}</td></tr>`;
     });
@@ -476,7 +476,7 @@ async function loadMonthlyCalendar() {
         const s = dayData[dateStr]||{meals:[]}; let c=0,p=0;
         if (s.meals) s.meals.forEach(m=>{c+=m.cal||0;p+=m.pro||0;});
         html += `<div style="border:1px solid #e0e0e0;border-radius:8px;padding:8px;min-height:80px;font-size:11px;">
-            <div style="font-weight:600;margin-bottom:4px;">${day}</div>
+            <div style="font-weight:600;margin-bottom:4px;">${day}${s.exercise ? ' <span style="font-size:10px;">🏋🏻‍♀️</span>' : ''}</div>
             <div style="color:#f87171;font-weight:600;">${c>0?Math.round(c):''}</div>
             <div style="color:#60a5fa;font-weight:600;">${p>0?p.toFixed(1)+'g':''}</div>
         </div>`;
@@ -528,13 +528,29 @@ window.loadMonthlyGraph = async (period) => {
 
 // 초기화
 async function init() {
+    // 미리보기/제한된 네트워크에서 Firebase 연결이 지연돼도 화면은 뜨도록 안전장치 (4초)
+    const safety = setTimeout(() => {
+        if (!data.meals) {
+            data = { exercise: false, meals: [
+                { id: 1, name: '☀️ 아침', fixed: true, cal: '', pro: '', notes: [] },
+                { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
+                { id: 3, name: '🌙 저녁', fixed: true, cal: '', pro: '', notes: [] }
+            ]};
+            document.getElementById('dateInput').value = currentDate;
+            render();
+        }
+        document.getElementById('loadingOverlay').style.display = 'none';
+        setSyncStatus('오프라인 (미리보기)');
+    }, 4000);
     try {
         await migrateFromLocalStorage();
         await load();
+        clearTimeout(safety);
     } catch(e) {
         console.error(e);
         setSyncStatus('연결 오류 ❌');
     } finally {
+        clearTimeout(safety);
         document.getElementById('loadingOverlay').style.display = 'none';
         checkBackupReminder();
     }
