@@ -418,7 +418,13 @@ async function renderWeek() {
     });
     const avgCal = calData.reduce((a,b)=>a+b,0) / calData.length;
     const avgPro = proData.reduce((a,b)=>a+b,0) / proData.length;
-    html += `<tr style="background:#f7f8fc;font-weight:700;border-top:2px solid #667eea;"><td>평균</td><td style="color:#f87171;">${Math.round(avgCal)}</td><td style="color:#60a5fa;">${avgPro.toFixed(1)}</td></tr>`;
+    const calDiff = Math.round(avgCal - 1800);
+    const proDiff = Math.round((avgPro - 120) * 10) / 10;
+    const calDiffColor = calDiff <= 0 ? '#4ade80' : '#ef4444';
+    const proDiffColor = proDiff < 0 ? '#ef4444' : '#4ade80';
+    const calDiffStr = (calDiff >= 0 ? '+' : '') + calDiff;
+    const proDiffStr = (proDiff >= 0 ? '+' : '') + proDiff;
+    html += `<tr style="background:#f7f8fc;font-weight:700;border-top:2px solid #667eea;"><td>평균</td><td style="color:#f87171;">${Math.round(avgCal)} <span style="font-size:10px;color:${calDiffColor};">(${calDiffStr})</span></td><td style="color:#60a5fa;">${avgPro.toFixed(1)} <span style="font-size:10px;color:${proDiffColor};">(${proDiffStr})</span></td></tr>`;
     document.getElementById('weeklyTable').innerHTML = html;
     // 입력값에 따라 y축 최댓값 자동 조정 (목표선 + 여유 10%)
     const calMax = Math.max(2200, Math.ceil(Math.max(...calData, 1800) * 1.1 / 100) * 100);
