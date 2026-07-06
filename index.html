@@ -416,6 +416,9 @@ async function renderWeek() {
         calData.push(c); proData.push(p);
         html += `<tr><td>${dayName} ${s.exercise?'🏋🏻‍♀️':''}</td><td>${Math.round(c)}</td><td>${p.toFixed(1)}</td></tr>`;
     });
+    const avgCal = calData.reduce((a,b)=>a+b,0) / calData.length;
+    const avgPro = proData.reduce((a,b)=>a+b,0) / proData.length;
+    html += `<tr style="background:#f7f8fc;font-weight:700;border-top:2px solid #667eea;"><td>평균</td><td style="color:#f87171;">${Math.round(avgCal)}</td><td style="color:#60a5fa;">${avgPro.toFixed(1)}</td></tr>`;
     document.getElementById('weeklyTable').innerHTML = html;
     // 입력값에 따라 y축 최댓값 자동 조정 (목표선 + 여유 10%)
     const calMax = Math.max(2200, Math.ceil(Math.max(...calData, 1800) * 1.1 / 100) * 100);
