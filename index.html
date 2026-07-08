@@ -105,7 +105,9 @@
                 </div>
             </div>
             <div id="meals"></div>
+            <datalist id="foodPresetsList"></datalist>
             <button class="btn-add" onclick="addMeal()">+ 항목 추가</button>
+            <div id="quickAddFoods" style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;justify-content:center;"></div>
             <div class="buttons">
                 <button class="btn-save" onclick="saveMeals()">💾 저장</button>
             </div>
@@ -185,6 +187,95 @@ let data = {};
 let calYear, calMonth; // 월간 캘린더가 현재 보고 있는 연/월
 let weekRefDate; // 주간 탭이 현재 보고 있는 주의 기준 날짜
 
+// ── 자주 먹는 메뉴 프리셋 (이름: {cal, pro, emoji}) ──────────────
+// 필요하면 언제든 얘기해서 추가/수정 가능
+const FOOD_PRESETS = {
+    '그릭요거트': { cal: 110, pro: 10, emoji: '🥣' },
+    '삶은계란':   { cal: 78,  pro: 6.5, emoji: '🥚' },
+    '단백질쉐이크': { cal: 150, pro: 25, emoji: '🥤' },
+    '단백질바':   { cal: 200, pro: 20, emoji: '🍫' }
+};
+
+// 동일/유의어 → 대표 프리셋 이름 매핑 (자동완성 목록으로도 사용됨)
+const FOOD_ALIASES = {
+    '그릭요거트': '그릭요거트', '그릭 요거트': '그릭요거트', '요거트': '그릭요거트',
+    '삶은계란': '삶은계란', '삶은 계란': '삶은계란', '계란': '삶은계란', '달걀': '삶은계란', '삶은달걀': '삶은계란',
+    '단백질쉐이크': '단백질쉐이크', '단백질 쉐이크': '단백질쉐이크', '프로틴쉐이크': '단백질쉐이크', '프로틴 쉐이크': '단백질쉐이크', '쉐이크': '단백질쉐이크', '단백질쉐이크1스쿱': '단백질쉐이크',
+    '단백질바': '단백질바', '단백질 바': '단백질바', '프로틴바': '단백질바', '프로틴 바': '단백질바'
+};
+
+function resolveFoodAlias(text) {
+    const norm = (text || '').trim().replace(/\s+/g, '').toLowerCase();
+    if (!norm) return null;
+    for (const [alias, canonical] of Object.entries(FOOD_ALIASES)) {
+        if (alias.replace(/\s+/g, '').toLowerCase() === norm) return canonical;
+    }
+    return null;
+}
+
+function renderQuickAddFoods() {
+    const el = document.getElementById('quickAddFoods');
+    if (el) el.innerHTML = buildFoodChipsHtml();
+    const dl = document.getElementById('foodPresetsList');
+    if (dl) dl.innerHTML = Object.keys(FOOD_ALIASES).map(name => `<option value="${name}">`).join('');
+}
+
+function buildFoodChipsHtml() {
+    return Object.entries(FOOD_PRESETS).map(([name, f]) =>
+        `<button type="button" class="btn" style="background:#f0f0f0;color:#667eea;font-size:12px;padding:6px 12px;border-radius:20px;" onclick="showFoodMealPicker('${name}')">${f.emoji} ${name}</button>`
+    ).join('');
+}
+
+// 퀵버튼 클릭 시 어떤 끼니에 추가할지 선택하는 UI
+window.showFoodMealPicker = (foodName) => {
+    const el = document.getElementById('quickAddFoods');
+    const preset = FOOD_PRESETS[foodName];
+    if (!el || !preset) return;
+    let html = `<div style="width:100%;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;">
+        <span style="font-size:12px;color:#667eea;font-weight:600;">${preset.emoji} ${foodName} → 어디에 추가할까요?</span>`;
+    data.meals.forEach(meal => {
+        html += `<button type="button" class="btn" style="background:#667eea;color:white;font-size:12px;padding:6px 12px;border-radius:20px;" onclick="applyQuickAddFood('${foodName}', ${meal.id})">${meal.name}</button>`;
+    });
+    html += `<button type="button" class="btn" style="background:#f0f0f0;color:#667eea;font-size:12px;padding:6px 12px;border-radius:20px;" onclick="applyQuickAddFood('${foodName}', null)">➕ 새 간식으로</button>`;
+    html += `<button type="button" class="btn" style="background:#fff;color:#999;font-size:12px;padding:6px 12px;border-radius:20px;border:1px solid #ddd;" onclick="renderQuickAddFoods()">취소</button>`;
+    html += `</div>`;
+    el.innerHTML = html;
+};
+
+// 선택한 끼니에 프리셋 칼로리/단백질을 더하고 메모에 기록 (mealId가 null이면 새 간식 항목 생성)
+window.applyQuickAddFood = (foodName, mealId) => {
+    const preset = FOOD_PRESETS[foodName];
+    if (!preset) return;
+    if (mealId === null) {
+        const id = Math.max(0, ...data.meals.map(m => m.id)) + 1;
+        data.meals.push({ id, name: `${preset.emoji} ${foodName}`, fixed: false, cal: preset.cal, pro: preset.pro, notes: [] });
+    } else {
+        const meal = data.meals.find(m => m.id === mealId);
+        if (!meal) return;
+        meal.notes.push(`${preset.emoji} ${foodName} (${preset.cal}kcal · ${preset.pro}g)`);
+        meal.cal = (parseFloat(meal.cal) || 0) + preset.cal;
+        meal.pro = Math.round(((parseFloat(meal.pro) || 0) + preset.pro) * 10) / 10;
+    }
+    render();
+};
+
+// 이름 입력창에 프리셋/유의어를 직접 타이핑했을 때 칼로리/단백질 자동완성 (덮어쓰기)
+function tryAutoFillByName(mealId, typedName) {
+    const canonical = resolveFoodAlias(typedName);
+    if (!canonical) return false;
+    const preset = FOOD_PRESETS[canonical];
+    const meal = data.meals.find(m => m.id === mealId);
+    if (!meal) return false;
+    const calEl = document.getElementById('cal_' + mealId);
+    const proEl = document.getElementById('pro_' + mealId);
+    if (calEl) calEl.value = preset.cal;
+    if (proEl) proEl.value = preset.pro;
+    meal.cal = preset.cal; meal.pro = preset.pro;
+    calc();
+    return true;
+}
+window.tryAutoFillByName = tryAutoFillByName;
+
 function setSyncStatus(msg) {
     const el = document.getElementById('syncStatus');
     if (el) el.textContent = '☁️ ' + msg;
@@ -254,7 +345,7 @@ function render() {
     data.meals.forEach((meal, idx) => {
         html += `<div class="meal">
         <div class="meal-header">
-            <div class="meal-name"><input type="text" value="${meal.name}" id="name_${meal.id}" ${meal.fixed ? 'readonly' : ''}></div>
+            <div class="meal-name"><input type="text" value="${meal.name}" id="name_${meal.id}" ${meal.fixed ? 'readonly' : `list="foodPresetsList" onchange="tryAutoFillByName(${meal.id}, this.value)"`}></div>
             <div class="meal-controls">
             ${!meal.fixed ? `<button class="meal-btn" onclick="moveUp(${idx})">↑</button><button class="meal-btn" onclick="moveDown(${idx})">↓</button><button class="meal-btn" onclick="delMeal(${meal.id})">✕</button>` : ''}
             </div>
@@ -262,7 +353,7 @@ function render() {
         <div class="notes">
             ${meal.notes.map((note, nidx) => `<div class="note-item"><div class="note-text">${note}</div><button class="note-del" onclick="editNote(${meal.id},${nidx})">수정</button><button class="note-del" onclick="delNote(${meal.id},${nidx})">✕</button></div>`).join('')}
             <div class="note-input">
-                <input type="text" id="noteInput_${meal.id}" placeholder="음식 상세" onkeypress="if(event.key==='Enter') addNote(${meal.id})">
+                <input type="text" id="noteInput_${meal.id}" placeholder="음식 상세" list="foodPresetsList" onkeypress="if(event.key==='Enter') addNote(${meal.id})">
                 <button onclick="addNote(${meal.id})">추가</button>
             </div>
         </div>
@@ -273,6 +364,7 @@ function render() {
         </div>`;
     });
     document.getElementById('meals').innerHTML = html;
+    renderQuickAddFoods();
     calc();
 }
 
@@ -302,7 +394,22 @@ function calc() {
 window.addNote = (mealId) => {
     const input = document.getElementById('noteInput_' + mealId);
     const text = input.value.trim();
-    if (text) { const meal = data.meals.find(m => m.id === mealId); if (meal) { meal.notes.push(text); input.value = ''; render(); } }
+    if (text) {
+        const meal = data.meals.find(m => m.id === mealId);
+        if (meal) {
+            const canonical = resolveFoodAlias(text);
+            if (canonical) {
+                const preset = FOOD_PRESETS[canonical];
+                meal.notes.push(`${preset.emoji} ${text} (${preset.cal}kcal · ${preset.pro}g)`);
+                meal.cal = (parseFloat(meal.cal) || 0) + preset.cal;
+                meal.pro = Math.round(((parseFloat(meal.pro) || 0) + preset.pro) * 10) / 10;
+            } else {
+                meal.notes.push(text);
+            }
+            input.value = '';
+            render();
+        }
+    }
 };
 window.delNote = (mealId, idx) => { const meal = data.meals.find(m => m.id === mealId); if (meal) { meal.notes.splice(idx, 1); render(); } };
 window.editNote = (mealId, idx) => { const meal = data.meals.find(m => m.id === mealId); if (meal) { const t = prompt('수정:', meal.notes[idx]); if (t !== null && t.trim()) { meal.notes[idx] = t.trim(); render(); } } };
