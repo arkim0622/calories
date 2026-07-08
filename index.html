@@ -188,36 +188,128 @@ let calYear, calMonth; // 월간 캘린더가 현재 보고 있는 연/월
 let weekRefDate; // 주간 탭이 현재 보고 있는 주의 기준 날짜
 
 // ── 자주 먹는 메뉴 프리셋 (이름: {cal, pro, emoji}) ──────────────
-// 필요하면 언제든 얘기해서 추가/수정 가능
-const FOOD_PRESETS = {
-    '그릭요거트': { cal: 110, pro: 10, emoji: '🥣' },
-    '삶은계란':   { cal: 78,  pro: 6.5, emoji: '🥚' },
+// 여기 있는 값은 실제 입력 이력이 아직 없을 때 쓰는 "기본 추정값"일 뿐.
+// refreshFoodHistory()가 Firestore 기록에서 같은 이름으로 실제 입력했던 값을 찾으면 자동으로 그 평균값으로 덮어씀.
+// 필요하면 언제든 얘기해서 이름 추가/수정 가능
+const FOOD_PRESET_DEFAULTS = {
+    '그릭요거트볼': { cal: 362, pro: 15,  emoji: '🥣' }, // 그릭요거트+바나나+블루베리+피넛버터+그래놀라 기준 추정
+    '삶은계란1':   { cal: 78,  pro: 6.5, emoji: '🥚' }, // 계란 1개
+    '삶은계란2':   { cal: 156, pro: 13,  emoji: '🥚' }, // 계란 2개
     '단백질쉐이크': { cal: 150, pro: 25, emoji: '🥤' },
-    '단백질바':   { cal: 200, pro: 20, emoji: '🍫' }
+    '단백질바':   { cal: 200, pro: 20, emoji: '🍫' },
+    '다크초콜릿': { cal: 109, pro: 1.5, emoji: '🍫' } // 70% 다크초콜릿 한 조각(약 20g) 기준 추정
 };
 
-// 동일/유의어 → 대표 프리셋 이름 매핑 (자동완성 목록으로도 사용됨)
-const FOOD_ALIASES = {
-    '그릭요거트': '그릭요거트', '그릭 요거트': '그릭요거트', '요거트': '그릭요거트',
-    '삶은계란': '삶은계란', '삶은 계란': '삶은계란', '계란': '삶은계란', '달걀': '삶은계란', '삶은달걀': '삶은계란',
-    '단백질쉐이크': '단백질쉐이크', '단백질 쉐이크': '단백질쉐이크', '프로틴쉐이크': '단백질쉐이크', '프로틴 쉐이크': '단백질쉐이크', '쉐이크': '단백질쉐이크', '단백질쉐이크1스쿱': '단백질쉐이크',
-    '단백질바': '단백질바', '단백질 바': '단백질바', '프로틴바': '단백질바', '프로틴 바': '단백질바'
-};
+// 실제 사용 중 참조되는 프리셋 값 (처음엔 기본 추정값, refreshFoodHistory() 이후 실제 이력 있으면 그 값으로 대체됨)
+let FOOD_PRESETS = JSON.parse(JSON.stringify(FOOD_PRESET_DEFAULTS));
 
-function resolveFoodAlias(text) {
-    const norm = (text || '').trim().replace(/\s+/g, '').toLowerCase();
+// 동일 프리셋 이름 자기 자신 매핑 (프리셋들은 항상 확정 값으로 인식)
+const FOOD_ALIASES = Object.fromEntries(Object.keys(FOOD_PRESET_DEFAULTS).map(name => [name, name]));
+
+// 실제로 다른 날짜에 2번 이상 입력했던 음식들의 통계 (정규화된 텍스트 -> {label, dates:Set, cals:[], pros:[]})
+// refreshFoodHistory()가 Firestore 전체 기록을 훑어서 채움
+let foodHistory = {};
+
+function normalizeFoodText(text) {
+    return (text || '').trim().replace(/\s+/g, '').toLowerCase();
+}
+
+// 메모/이름에서 "🥣 그릭요거트 (110kcal · 10g)" 형태의 자동 태그를 분리해 원문과 칼로리를 뽑아냄
+function parseFoodEntry(rawText) {
+    let text = (rawText || '').trim();
+    if (!text) return null;
+    let cal = null, pro = null;
+    const tagMatch = text.match(/\(([\d.]+)kcal\s*·\s*([\d.]+)g\)\s*$/);
+    if (tagMatch) { cal = parseFloat(tagMatch[1]); pro = parseFloat(tagMatch[2]); text = text.slice(0, tagMatch.index).trim(); }
+    // 맨 앞의 이모지류(한글/영문/숫자가 아닌 문자) 제거
+    text = text.replace(/^[^가-힣a-zA-Z0-9]+/, '').trim();
+    if (!text) return null;
+    return { label: text, cal, pro };
+}
+
+function registerFoodOccurrence(freq, rawText, dateId, mealCal, mealPro) {
+    const parsed = parseFoodEntry(rawText);
+    if (!parsed) return;
+    const key = normalizeFoodText(parsed.label);
+    if (!key) return;
+    if (!freq[key]) freq[key] = { label: parsed.label, dates: new Set(), cals: [], pros: [] };
+    freq[key].dates.add(dateId);
+    const cal = (typeof mealCal === 'number' && mealCal > 0) ? mealCal : parsed.cal;
+    const pro = (typeof mealPro === 'number' && mealPro > 0) ? mealPro : parsed.pro;
+    if (cal != null) freq[key].cals.push(cal);
+    if (pro != null) freq[key].pros.push(pro);
+}
+
+// Firestore의 caldata 전체를 훑어서 '다른 날짜에 2번 이상 등장한 음식' 통계를 만듦
+async function refreshFoodHistory() {
+    try {
+        const snapshot = await getDocs(collection(db, 'caldata'));
+        const freq = {};
+        snapshot.forEach(docSnap => {
+            const d = docSnap.data();
+            if (!d || !Array.isArray(d.meals)) return;
+            d.meals.forEach(meal => {
+                if (!meal.fixed) registerFoodOccurrence(freq, meal.name, docSnap.id, meal.cal, meal.pro);
+                if (Array.isArray(meal.notes)) meal.notes.forEach(note => registerFoodOccurrence(freq, note, docSnap.id));
+            });
+        });
+        foodHistory = freq;
+        applyHistoryToPresets();
+        renderQuickAddFoods();
+    } catch (e) {
+        console.error('음식 이력 로드 실패', e);
+    }
+}
+
+// 프리셋으로 등록해둔 이름을 실제로 입력했던 적이 있으면(1회 이상) 그 평균 칼로리/단백질로 프리셋 값을 갱신
+function applyHistoryToPresets() {
+    Object.keys(FOOD_PRESET_DEFAULTS).forEach(name => {
+        const hist = foodHistory[normalizeFoodText(name)];
+        if (hist && hist.cals.length > 0) {
+            const avgCal = Math.round(hist.cals.reduce((a, b) => a + b, 0) / hist.cals.length);
+            const avgPro = hist.pros.length ? Math.round((hist.pros.reduce((a, b) => a + b, 0) / hist.pros.length) * 10) / 10 : FOOD_PRESET_DEFAULTS[name].pro;
+            FOOD_PRESETS[name] = { cal: avgCal, pro: avgPro, emoji: FOOD_PRESET_DEFAULTS[name].emoji };
+        } else {
+            FOOD_PRESETS[name] = { ...FOOD_PRESET_DEFAULTS[name] };
+        }
+    });
+}
+
+// 프리셋(확정값) 또는 실제 2회 이상 입력 이력(평균값)에서 칼로리/단백질을 찾음
+function lookupFood(text) {
+    const norm = normalizeFoodText(text);
     if (!norm) return null;
     for (const [alias, canonical] of Object.entries(FOOD_ALIASES)) {
-        if (alias.replace(/\s+/g, '').toLowerCase() === norm) return canonical;
+        if (normalizeFoodText(alias) === norm) {
+            const p = FOOD_PRESETS[canonical];
+            return { cal: p.cal, pro: p.pro, emoji: p.emoji, label: canonical };
+        }
+    }
+    const hist = foodHistory[norm];
+    if (hist && hist.dates.size >= 2 && hist.cals.length > 0) {
+        const avgCal = Math.round(hist.cals.reduce((a, b) => a + b, 0) / hist.cals.length);
+        const avgPro = hist.pros.length ? Math.round((hist.pros.reduce((a, b) => a + b, 0) / hist.pros.length) * 10) / 10 : 0;
+        return { cal: avgCal, pro: avgPro, emoji: '🍽️', label: hist.label };
     }
     return null;
+}
+
+function buildDatalistOptions() {
+    const seen = new Set();
+    const options = [];
+    Object.keys(FOOD_PRESETS).forEach(name => { options.push(name); seen.add(normalizeFoodText(name)); });
+    Object.values(foodHistory).forEach(item => {
+        const key = normalizeFoodText(item.label);
+        if (item.dates.size >= 2 && !seen.has(key)) { options.push(item.label); seen.add(key); }
+    });
+    return options;
 }
 
 function renderQuickAddFoods() {
     const el = document.getElementById('quickAddFoods');
     if (el) el.innerHTML = buildFoodChipsHtml();
     const dl = document.getElementById('foodPresetsList');
-    if (dl) dl.innerHTML = Object.keys(FOOD_ALIASES).map(name => `<option value="${name}">`).join('');
+    if (dl) dl.innerHTML = buildDatalistOptions().map(name => `<option value="${name}">`).join('');
 }
 
 function buildFoodChipsHtml() {
@@ -259,18 +351,17 @@ window.applyQuickAddFood = (foodName, mealId) => {
     render();
 };
 
-// 이름 입력창에 프리셋/유의어를 직접 타이핑했을 때 칼로리/단백질 자동완성 (덮어쓰기)
+// 이름 입력창에 프리셋 또는 2회 이상 실제 입력 이력이 있는 음식을 타이핑했을 때 칼로리/단백질 자동완성 (덮어쓰기)
 function tryAutoFillByName(mealId, typedName) {
-    const canonical = resolveFoodAlias(typedName);
-    if (!canonical) return false;
-    const preset = FOOD_PRESETS[canonical];
+    const found = lookupFood(typedName);
+    if (!found) return false;
     const meal = data.meals.find(m => m.id === mealId);
     if (!meal) return false;
     const calEl = document.getElementById('cal_' + mealId);
     const proEl = document.getElementById('pro_' + mealId);
-    if (calEl) calEl.value = preset.cal;
-    if (proEl) proEl.value = preset.pro;
-    meal.cal = preset.cal; meal.pro = preset.pro;
+    if (calEl) calEl.value = found.cal;
+    if (proEl) proEl.value = found.pro;
+    meal.cal = found.cal; meal.pro = found.pro;
     calc();
     return true;
 }
@@ -397,12 +488,11 @@ window.addNote = (mealId) => {
     if (text) {
         const meal = data.meals.find(m => m.id === mealId);
         if (meal) {
-            const canonical = resolveFoodAlias(text);
-            if (canonical) {
-                const preset = FOOD_PRESETS[canonical];
-                meal.notes.push(`${preset.emoji} ${text} (${preset.cal}kcal · ${preset.pro}g)`);
-                meal.cal = (parseFloat(meal.cal) || 0) + preset.cal;
-                meal.pro = Math.round(((parseFloat(meal.pro) || 0) + preset.pro) * 10) / 10;
+            const found = lookupFood(text);
+            if (found) {
+                meal.notes.push(`${found.emoji} ${text} (${found.cal}kcal · ${found.pro}g)`);
+                meal.cal = (parseFloat(meal.cal) || 0) + found.cal;
+                meal.pro = Math.round(((parseFloat(meal.pro) || 0) + found.pro) * 10) / 10;
             } else {
                 meal.notes.push(text);
             }
@@ -432,6 +522,7 @@ window.saveMeals = async () => {
     await setDoc(doc(db, 'caldata', currentDate), data);
     setSyncStatus('저장됨 ✅');
     setTimeout(() => setSyncStatus('Firebase 연결됨'), 2000);
+    refreshFoodHistory(); // 방금 저장한 내용도 자동완성 이력에 바로 반영
 };
 
 window.prevDay = async () => { currentDate = shiftDate(currentDate, -1); await load(); };
@@ -670,6 +761,7 @@ async function init() {
         clearTimeout(safety);
         document.getElementById('loadingOverlay').style.display = 'none';
         checkBackupReminder();
+        refreshFoodHistory(); // 실제 입력 이력 기반 자동완성 목록 준비 (막혀도 무시하고 진행)
     }
 }
 init();
