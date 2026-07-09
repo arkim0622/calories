@@ -192,12 +192,12 @@ let weekRefDate; // 주간 탭이 현재 보고 있는 주의 기준 날짜
 // refreshFoodHistory()가 Firestore 기록에서 같은 이름으로 실제 입력했던 값을 찾으면 자동으로 그 평균값으로 덮어씀.
 // 필요하면 언제든 얘기해서 이름 추가/수정 가능
 const FOOD_PRESET_DEFAULTS = {
-    '그릭요거트볼': { cal: 362, pro: 15,  emoji: '🥣' }, // 그릭요거트+바나나+블루베리+피넛버터+그래놀라 기준 추정
-    '삶은계란1':   { cal: 78,  pro: 6.5, emoji: '🥚' }, // 계란 1개
-    '삶은계란2':   { cal: 156, pro: 13,  emoji: '🥚' }, // 계란 2개
-    '단백질쉐이크': { cal: 150, pro: 25, emoji: '🥤' },
-    '단백질바':   { cal: 200, pro: 20, emoji: '🍫' },
-    '다크초콜릿': { cal: 109, pro: 1.5, emoji: '🍫' } // 70% 다크초콜릿 한 조각(약 20g) 기준 추정
+    '그릭요거트볼': { cal: 360, pro: 15,  emoji: '🥣' }, // 그릭요거트+바나나+블루베리+피넛버터+그래놀라 기준 추정
+    '삶은계란1':   { cal: 70,  pro: 6,   emoji: '🥚' }, // 계란 1개
+    '삶은계란2':   { cal: 140, pro: 12,  emoji: '🥚' }, // 계란 2개
+    '단백질쉐이크': { cal: 99,  pro: 20, emoji: '🥤' },
+    '단백질바':   { cal: 100, pro: 15, emoji: '🍫' },
+    '다크초콜릿': { cal: 60,  pro: 1,   emoji: '🍫' } // 70% 다크초콜릿 한 조각(약 20g) 기준 추정
 };
 
 // 실제 사용 중 참조되는 프리셋 값 (처음엔 기본 추정값, refreshFoodHistory() 이후 실제 이력 있으면 그 값으로 대체됨)
@@ -344,7 +344,7 @@ window.applyQuickAddFood = (foodName, mealId) => {
     } else {
         const meal = data.meals.find(m => m.id === mealId);
         if (!meal) return;
-        meal.notes.push(`${preset.emoji} ${foodName} (${preset.cal}kcal · ${preset.pro}g)`);
+        meal.notes.push(foodName);
         meal.cal = (parseFloat(meal.cal) || 0) + preset.cal;
         meal.pro = Math.round(((parseFloat(meal.pro) || 0) + preset.pro) * 10) / 10;
     }
@@ -490,7 +490,7 @@ window.addNote = (mealId) => {
         if (meal) {
             const found = lookupFood(text);
             if (found) {
-                meal.notes.push(`${found.emoji} ${text} (${found.cal}kcal · ${found.pro}g)`);
+                meal.notes.push(text);
                 meal.cal = (parseFloat(meal.cal) || 0) + found.cal;
                 meal.pro = Math.round(((parseFloat(meal.pro) || 0) + found.pro) * 10) / 10;
             } else {
