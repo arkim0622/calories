@@ -94,12 +94,12 @@
                 <div class="stat-row">
                     <div class="stat" id="calStat">
                         <div class="stat-label">칼로리</div>
-                        <div class="stat-value"><span id="totalCal">0</span> / 1800</div>
+                        <div class="stat-value"><span id="totalCal">0</span> / <span id="calGoalDisplay">1800</span></div>
                         <div class="stat-diff" id="calDiff"></div>
                     </div>
                     <div class="stat" id="proStat">
                         <div class="stat-label">단백질</div>
-                        <div class="stat-value"><span id="totalPro">0</span> / 120</div>
+                        <div class="stat-value"><span id="totalPro">0</span> / <span id="proGoalDisplay">90</span></div>
                         <div class="stat-diff" id="proDiff"></div>
                     </div>
                 </div>
@@ -186,6 +186,14 @@ let currentDate = todayStr();
 let data = {};
 let calYear, calMonth; // 월간 캘린더가 현재 보고 있는 연/월
 let weekRefDate; // 주간 탭이 현재 보고 있는 주의 기준 날짜
+
+// ── 목표치 ─────────────────────────────────────────────────
+// 기본(비운동일) 목표. 주간 평균은 운동 여부와 상관없이 항상 이 기본값 기준으로 표시.
+const BASE_CAL_GOAL = 1800;
+const BASE_PRO_GOAL = 90;
+// 그날 '운동함'을 체크하면 일별 목표만 아래 값으로 올라감
+const EXERCISE_CAL_GOAL = 1900;
+const EXERCISE_PRO_GOAL = 100;
 
 // ── 자주 먹는 메뉴 프리셋 (이름: {cal, pro, emoji}) ──────────────
 // 여기 있는 값은 실제 입력 이력이 아직 없을 때 쓰는 "기본 추정값"일 뿐.
@@ -470,13 +478,17 @@ function calc() {
     });
     document.getElementById('totalCal').textContent = Math.round(c);
     document.getElementById('totalPro').textContent = p.toFixed(1);
-    const calDiff = Math.round(c - 1800);
+    const calGoal = data.exercise ? EXERCISE_CAL_GOAL : BASE_CAL_GOAL;
+    const proGoal = data.exercise ? EXERCISE_PRO_GOAL : BASE_PRO_GOAL;
+    document.getElementById('calGoalDisplay').textContent = calGoal;
+    document.getElementById('proGoalDisplay').textContent = proGoal;
+    const calDiff = Math.round(c - calGoal);
     const calDiffEl = document.getElementById('calDiff');
-    calDiffEl.className = 'stat-diff ' + (c < 1800 ? 'stat-green' : 'stat-red');
+    calDiffEl.className = 'stat-diff ' + (c < calGoal ? 'stat-green' : 'stat-red');
     calDiffEl.textContent = (calDiff >= 0 ? '+' : '') + calDiff;
-    const proDiff = Math.round((p - 120) * 10) / 10;
+    const proDiff = Math.round((p - proGoal) * 10) / 10;
     const proDiffEl = document.getElementById('proDiff');
-    proDiffEl.className = 'stat-diff ' + (p < 120 ? 'stat-red' : 'stat-green');
+    proDiffEl.className = 'stat-diff ' + (p < proGoal ? 'stat-red' : 'stat-green');
     proDiffEl.textContent = (proDiff >= 0 ? '+' : '') + proDiff;
 }
 
@@ -507,7 +519,7 @@ window.addMeal = () => { const emojis = ['🥤','🍪','🍰','🧁','🍩','☕
 window.delMeal = (id) => { data.meals = data.meals.filter(m => m.id !== id); render(); };
 window.moveUp = (idx) => { if (idx > 0 && !data.meals[idx].fixed) { [data.meals[idx], data.meals[idx-1]] = [data.meals[idx-1], data.meals[idx]]; render(); } };
 window.moveDown = (idx) => { if (idx < data.meals.length-1 && !data.meals[idx].fixed) { [data.meals[idx], data.meals[idx+1]] = [data.meals[idx+1], data.meals[idx]]; render(); } };
-window.updateExercise = () => { data.exercise = document.getElementById('exerciseCheck').checked; };
+window.updateExercise = () => { data.exercise = document.getElementById('exerciseCheck').checked; calc(); };
 window.calc = calc;
 
 window.saveMeals = async () => {
@@ -616,8 +628,8 @@ async function renderWeek() {
     });
     const avgCal = calData.reduce((a,b)=>a+b,0) / calData.length;
     const avgPro = proData.reduce((a,b)=>a+b,0) / proData.length;
-    const calDiff = Math.round(avgCal - 1800);
-    const proDiff = Math.round((avgPro - 120) * 10) / 10;
+    const calDiff = Math.round(avgCal - BASE_CAL_GOAL);
+    const proDiff = Math.round((avgPro - BASE_PRO_GOAL) * 10) / 10;
     const calDiffColor = calDiff <= 0 ? '#4ade80' : '#ef4444';
     const proDiffColor = proDiff < 0 ? '#ef4444' : '#4ade80';
     const calDiffStr = (calDiff >= 0 ? '+' : '') + calDiff;
@@ -625,8 +637,8 @@ async function renderWeek() {
     html += `<tr style="background:#f7f8fc;font-weight:700;border-top:2px solid #667eea;"><td>평균</td><td style="color:#f87171;">${Math.round(avgCal)} <span style="font-size:10px;color:${calDiffColor};">(${calDiffStr})</span></td><td style="color:#60a5fa;">${avgPro.toFixed(1)} <span style="font-size:10px;color:${proDiffColor};">(${proDiffStr})</span></td></tr>`;
     document.getElementById('weeklyTable').innerHTML = html;
     // 입력값에 따라 y축 최댓값 자동 조정 (목표선 + 여유 10%)
-    const calMax = Math.max(2200, Math.ceil(Math.max(...calData, 1800) * 1.1 / 100) * 100);
-    const proMax = Math.max(180, Math.ceil(Math.max(...proData, 120) * 1.1 / 10) * 10);
+    const calMax = Math.max(2200, Math.ceil(Math.max(...calData, BASE_CAL_GOAL) * 1.1 / 100) * 100);
+    const proMax = Math.max(180, Math.ceil(Math.max(...proData, BASE_PRO_GOAL) * 1.1 / 10) * 10);
     const ctx = document.getElementById('weeklyChart').getContext('2d');
     if (window.weeklyChartInstance) window.weeklyChartInstance.destroy();
     Chart.register(ChartDataLabels);
@@ -634,8 +646,8 @@ async function renderWeek() {
         type:'line', data:{ labels, datasets:[
             {data:calData,borderColor:'#f87171',borderWidth:2,fill:false,pointRadius:4,pointBackgroundColor:'#f87171',pointBorderColor:'#fff',pointBorderWidth:2,yAxisID:'y',tension:0.4,datalabels:{color:'#f87171',display:true,font:{weight:'bold',size:10}}},
             {data:proData,borderColor:'#60a5fa',borderWidth:2,fill:false,pointRadius:4,pointBackgroundColor:'#60a5fa',pointBorderColor:'#fff',pointBorderWidth:2,yAxisID:'y1',tension:0.4,datalabels:{color:'#60a5fa',display:true,font:{weight:'bold',size:10}}},
-            {data:[1800,1800,1800,1800,1800,1800,1800],borderColor:'#f87171',borderDash:[8,4],borderWidth:2,fill:false,pointRadius:0,yAxisID:'y',datalabels:{display:false}},
-            {data:[120,120,120,120,120,120,120],borderColor:'#60a5fa',borderDash:[8,4],borderWidth:2,fill:false,pointRadius:0,yAxisID:'y1',datalabels:{display:false}}
+            {data:Array(7).fill(BASE_CAL_GOAL),borderColor:'#f87171',borderDash:[8,4],borderWidth:2,fill:false,pointRadius:0,yAxisID:'y',datalabels:{display:false}},
+            {data:Array(7).fill(BASE_PRO_GOAL),borderColor:'#60a5fa',borderDash:[8,4],borderWidth:2,fill:false,pointRadius:0,yAxisID:'y1',datalabels:{display:false}}
         ]},
         options:{ responsive:true, plugins:{ legend:{display:false}, datalabels:{display:true,font:{size:11,weight:'bold'},align:'top',offset:5} },
             scales:{ y:{type:'linear',position:'left',ticks:{callback:()=>''},min:0,max:calMax}, y1:{type:'linear',position:'right',ticks:{callback:()=>''},grid:{drawOnChartArea:false},min:0,max:proMax} } }
@@ -717,8 +729,8 @@ window.loadMonthlyGraph = async (period) => {
         labels.push(label); calData.push(c); proData.push(p);
     });
     // 입력값에 따라 y축 최댓값 자동 조정 (목표선 + 여유 10%)
-    const calMax = Math.max(2200, Math.ceil(Math.max(...calData, 1800) * 1.1 / 100) * 100);
-    const proMax = Math.max(180, Math.ceil(Math.max(...proData, 120) * 1.1 / 10) * 10);
+    const calMax = Math.max(2200, Math.ceil(Math.max(...calData, BASE_CAL_GOAL) * 1.1 / 100) * 100);
+    const proMax = Math.max(180, Math.ceil(Math.max(...proData, BASE_PRO_GOAL) * 1.1 / 10) * 10);
     const ctx = document.getElementById('monthlyGraphChart').getContext('2d');
     if (window.monthlyGraphInstance) window.monthlyGraphInstance.destroy();
     Chart.register(ChartDataLabels);
@@ -726,8 +738,8 @@ window.loadMonthlyGraph = async (period) => {
         type:'line', data:{ labels, datasets:[
             {data:calData,borderColor:'#f87171',borderWidth:2,fill:false,pointRadius:3,pointBackgroundColor:'#f87171',yAxisID:'y',tension:0.4,datalabels:{color:'#f87171',display:showLabels,font:{weight:'bold',size:9}}},
             {data:proData,borderColor:'#60a5fa',borderWidth:2,fill:false,pointRadius:3,pointBackgroundColor:'#60a5fa',yAxisID:'y1',tension:0.4,datalabels:{color:'#60a5fa',display:showLabels,font:{weight:'bold',size:9}}},
-            {data:Array(calData.length).fill(1800),borderColor:'#f87171',borderDash:[8,4],borderWidth:1.5,fill:false,pointRadius:0,yAxisID:'y',datalabels:{display:false}},
-            {data:Array(proData.length).fill(120),borderColor:'#60a5fa',borderDash:[8,4],borderWidth:1.5,fill:false,pointRadius:0,yAxisID:'y1',datalabels:{display:false}}
+            {data:Array(calData.length).fill(BASE_CAL_GOAL),borderColor:'#f87171',borderDash:[8,4],borderWidth:1.5,fill:false,pointRadius:0,yAxisID:'y',datalabels:{display:false}},
+            {data:Array(proData.length).fill(BASE_PRO_GOAL),borderColor:'#60a5fa',borderDash:[8,4],borderWidth:1.5,fill:false,pointRadius:0,yAxisID:'y1',datalabels:{display:false}}
         ]},
         options:{ responsive:true, plugins:{legend:{display:false}},
             scales:{ x:{ticks:{font:{size:10}}}, y:{type:'linear',position:'left',ticks:{callback:()=>''},min:0,max:calMax}, y1:{type:'linear',position:'right',ticks:{callback:()=>''},grid:{drawOnChartArea:false},min:0,max:proMax} } }
