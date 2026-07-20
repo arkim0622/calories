@@ -196,6 +196,8 @@ let weekRefDate; // 주간 탭이 현재 보고 있는 주의 기준 날짜
 // 기본(비운동일) 목표. 주간 평균은 운동 여부와 상관없이 항상 이 기본값 기준으로 표시.
 const BASE_CAL_GOAL = 1800;
 const BASE_PRO_GOAL = 90;
+// 체중 그래프 기준선
+const WEIGHT_GOAL = 55.0;
 // 그날 '운동함'을 체크하면 일별 목표만 아래 값으로 올라감
 const EXERCISE_CAL_GOAL = 1900;
 const EXERCISE_PRO_GOAL = 100;
@@ -672,7 +674,7 @@ async function renderWeek() {
     document.getElementById('weekTitle').innerHTML = `<button onclick="prevWeek()" class="btn" style="background:#f0f0f0;color:#667eea;padding:4px 14px;font-size:16px;">‹</button><span style="font-weight:bold;">${mon.getMonth()+1}/${mon.getDate()} ~ ${sun.getMonth()+1}/${sun.getDate()}</span><button onclick="nextWeek()" class="btn" style="background:#f0f0f0;color:#667eea;padding:4px 14px;font-size:16px;">›</button>`;
     const dayData = await fetchDateRange(dates);
     const days = ['월','화','수','목','금','토','일'];
-    let html = ''; const calData=[], proData=[], weightData=[], labels=[];
+    let html = ''; const calData=[], proData=[], weightData=[], weightChartData=[], labels=[];
     dates.forEach((dateStr, i) => {
         const s = dayData[dateStr]; let c=0,p=0;
         if (s.meals) s.meals.forEach(m => { c+=m.cal||0; p+=m.pro||0; });
@@ -680,8 +682,10 @@ async function renderWeek() {
         const dayName = days[dObj.getDay()===0?6:dObj.getDay()-1];
         labels.push(`${dObj.getMonth()+1}/${dObj.getDate()} ${dayName}${s.exercise ? ' 🏋🏻‍♀️' : ''}`);
         calData.push(c); proData.push(p);
-        if (typeof s.weight === 'number' && s.weight > 0) weightData.push(s.weight);
-        html += `<tr><td>${dayName} ${s.exercise?'🏋🏻‍♀️':''}</td><td>${typeof s.weight === 'number' && s.weight > 0 ? s.weight.toFixed(1) : '-'}</td><td>${Math.round(c)}</td><td>${p.toFixed(1)}</td></tr>`;
+        const hasWeight = typeof s.weight === 'number' && s.weight > 0;
+        if (hasWeight) weightData.push(s.weight);
+        weightChartData.push(hasWeight ? s.weight : null);
+        html += `<tr><td>${dayName} ${s.exercise?'🏋🏻‍♀️':''}</td><td>${hasWeight ? s.weight.toFixed(1) : '-'}</td><td>${Math.round(c)}</td><td>${p.toFixed(1)}</td></tr>`;
     });
     const avgCal = calData.reduce((a,b)=>a+b,0) / calData.length;
     const avgPro = proData.reduce((a,b)=>a+b,0) / proData.length;
@@ -699,6 +703,9 @@ async function renderWeek() {
     // 입력값에 따라 y축 최댓값 자동 조정 (목표선 + 여유 10%)
     const calMax = Math.max(2200, Math.ceil(Math.max(...calData, BASE_CAL_GOAL) * 1.1 / 100) * 100);
     const proMax = Math.max(180, Math.ceil(Math.max(...proData, BASE_PRO_GOAL) * 1.1 / 10) * 10);
+    const validWeights = weightChartData.filter(w => typeof w === 'number');
+    const weightMin = Math.min(...validWeights, WEIGHT_GOAL) - 1;
+    const weightMax = Math.max(...validWeights, WEIGHT_GOAL) + 1;
     const ctx = document.getElementById('weeklyChart').getContext('2d');
     if (window.weeklyChartInstance) window.weeklyChartInstance.destroy();
     Chart.register(ChartDataLabels);
@@ -706,11 +713,13 @@ async function renderWeek() {
         type:'line', data:{ labels, datasets:[
             {data:calData,borderColor:'#f87171',borderWidth:2,fill:false,pointRadius:4,pointBackgroundColor:'#f87171',pointBorderColor:'#fff',pointBorderWidth:2,yAxisID:'y',tension:0.4,datalabels:{color:'#f87171',display:true,font:{weight:'bold',size:10}}},
             {data:proData,borderColor:'#60a5fa',borderWidth:2,fill:false,pointRadius:4,pointBackgroundColor:'#60a5fa',pointBorderColor:'#fff',pointBorderWidth:2,yAxisID:'y1',tension:0.4,datalabels:{color:'#60a5fa',display:true,font:{weight:'bold',size:10}}},
+            {data:weightChartData,borderColor:'#a78bfa',borderWidth:2,fill:false,pointRadius:4,pointBackgroundColor:'#a78bfa',pointBorderColor:'#fff',pointBorderWidth:2,yAxisID:'y2',tension:0.4,spanGaps:true,datalabels:{color:'#a78bfa',display:true,font:{weight:'bold',size:10},formatter:v=>v==null?'':v}},
             {data:Array(7).fill(BASE_CAL_GOAL),borderColor:'#f87171',borderDash:[8,4],borderWidth:2,fill:false,pointRadius:0,yAxisID:'y',datalabels:{display:false}},
-            {data:Array(7).fill(BASE_PRO_GOAL),borderColor:'#60a5fa',borderDash:[8,4],borderWidth:2,fill:false,pointRadius:0,yAxisID:'y1',datalabels:{display:false}}
+            {data:Array(7).fill(BASE_PRO_GOAL),borderColor:'#60a5fa',borderDash:[8,4],borderWidth:2,fill:false,pointRadius:0,yAxisID:'y1',datalabels:{display:false}},
+            {data:Array(7).fill(WEIGHT_GOAL),borderColor:'#a78bfa',borderDash:[8,4],borderWidth:2,fill:false,pointRadius:0,yAxisID:'y2',datalabels:{display:false}}
         ]},
         options:{ responsive:true, plugins:{ legend:{display:false}, datalabels:{display:true,font:{size:11,weight:'bold'},align:'top',offset:5} },
-            scales:{ y:{type:'linear',position:'left',ticks:{callback:()=>''},min:0,max:calMax}, y1:{type:'linear',position:'right',ticks:{callback:()=>''},grid:{drawOnChartArea:false},min:0,max:proMax} } }
+            scales:{ y:{type:'linear',position:'left',ticks:{callback:()=>''},min:0,max:calMax}, y1:{type:'linear',position:'right',ticks:{callback:()=>''},grid:{drawOnChartArea:false},min:0,max:proMax}, y2:{type:'linear',display:false,min:weightMin,max:weightMax} } }
     });
 }
 
@@ -778,7 +787,7 @@ window.loadMonthlyGraph = async (period) => {
     const dates = makeDateList(startDate.toISOString().split('T')[0], currentDate);
     const dayData = await fetchDateRange(dates);
     const showLabels = period==='1w'||period==='1m';
-    const calData=[], proData=[], labels=[];
+    const calData=[], proData=[], weightChartData=[], labels=[];
     dates.forEach((dateStr,idx) => {
         const s = dayData[dateStr]||{meals:[]}; let c=0,p=0;
         if (s.meals) s.meals.forEach(m=>{c+=m.cal||0;p+=m.pro||0;});
@@ -789,10 +798,15 @@ window.loadMonthlyGraph = async (period) => {
         else if (period==='2m') { if(dom===1||dom===15||isToday) label=`${d.getMonth()+1}/${dom}`; }
         else { if(dom===1||isToday) label=`${d.getMonth()+1}/${dom}`; }
         labels.push(label); calData.push(c); proData.push(p);
+        const hasWeight = typeof s.weight === 'number' && s.weight > 0;
+        weightChartData.push(hasWeight ? s.weight : null);
     });
     // 입력값에 따라 y축 최댓값 자동 조정 (목표선 + 여유 10%)
     const calMax = Math.max(2200, Math.ceil(Math.max(...calData, BASE_CAL_GOAL) * 1.1 / 100) * 100);
     const proMax = Math.max(180, Math.ceil(Math.max(...proData, BASE_PRO_GOAL) * 1.1 / 10) * 10);
+    const validWeights = weightChartData.filter(w => typeof w === 'number');
+    const weightMin = Math.min(...validWeights, WEIGHT_GOAL) - 1;
+    const weightMax = Math.max(...validWeights, WEIGHT_GOAL) + 1;
     const ctx = document.getElementById('monthlyGraphChart').getContext('2d');
     if (window.monthlyGraphInstance) window.monthlyGraphInstance.destroy();
     Chart.register(ChartDataLabels);
@@ -800,11 +814,13 @@ window.loadMonthlyGraph = async (period) => {
         type:'line', data:{ labels, datasets:[
             {data:calData,borderColor:'#f87171',borderWidth:2,fill:false,pointRadius:3,pointBackgroundColor:'#f87171',yAxisID:'y',tension:0.4,datalabels:{color:'#f87171',display:showLabels,font:{weight:'bold',size:9}}},
             {data:proData,borderColor:'#60a5fa',borderWidth:2,fill:false,pointRadius:3,pointBackgroundColor:'#60a5fa',yAxisID:'y1',tension:0.4,datalabels:{color:'#60a5fa',display:showLabels,font:{weight:'bold',size:9}}},
+            {data:weightChartData,borderColor:'#a78bfa',borderWidth:2,fill:false,pointRadius:3,pointBackgroundColor:'#a78bfa',yAxisID:'y2',tension:0.4,spanGaps:true,datalabels:{color:'#a78bfa',display:showLabels,font:{weight:'bold',size:9},formatter:v=>v==null?'':v}},
             {data:Array(calData.length).fill(BASE_CAL_GOAL),borderColor:'#f87171',borderDash:[8,4],borderWidth:1.5,fill:false,pointRadius:0,yAxisID:'y',datalabels:{display:false}},
-            {data:Array(proData.length).fill(BASE_PRO_GOAL),borderColor:'#60a5fa',borderDash:[8,4],borderWidth:1.5,fill:false,pointRadius:0,yAxisID:'y1',datalabels:{display:false}}
+            {data:Array(proData.length).fill(BASE_PRO_GOAL),borderColor:'#60a5fa',borderDash:[8,4],borderWidth:1.5,fill:false,pointRadius:0,yAxisID:'y1',datalabels:{display:false}},
+            {data:Array(calData.length).fill(WEIGHT_GOAL),borderColor:'#a78bfa',borderDash:[8,4],borderWidth:1.5,fill:false,pointRadius:0,yAxisID:'y2',datalabels:{display:false}}
         ]},
         options:{ responsive:true, plugins:{legend:{display:false}},
-            scales:{ x:{ticks:{font:{size:10}}}, y:{type:'linear',position:'left',ticks:{callback:()=>''},min:0,max:calMax}, y1:{type:'linear',position:'right',ticks:{callback:()=>''},grid:{drawOnChartArea:false},min:0,max:proMax} } }
+            scales:{ x:{ticks:{font:{size:10}}}, y:{type:'linear',position:'left',ticks:{callback:()=>''},min:0,max:calMax}, y1:{type:'linear',position:'right',ticks:{callback:()=>''},grid:{drawOnChartArea:false},min:0,max:proMax}, y2:{type:'linear',display:false,min:weightMin,max:weightMax} } }
     });
 };
 
