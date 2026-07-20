@@ -85,7 +85,11 @@
                 <button class="btn btn-nav" onclick="nextDay()">다음 →</button>
             </div>
             <div class="stats">
-                <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; justify-content: center;">
+                <div style="display: flex; gap: 14px; margin-bottom: 10px; align-items: center; justify-content: center; flex-wrap: wrap;">
+                    <label style="color: white; font-weight: 600; font-size: 13px; display: flex; gap: 6px; align-items: center;">
+                        ⚖️ 체중(kg)
+                        <input type="number" id="weightInput" step="0.1" placeholder="0.0" onchange="updateWeight()" style="width: 64px; padding: 6px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; text-align: center;">
+                    </label>
                     <label style="color: white; font-weight: 600; font-size: 13px; display: flex; gap: 6px; align-items: center;">
                         <input type="checkbox" id="exerciseCheck" onchange="updateExercise()" style="width: 18px; height: 18px; cursor: pointer;">
                         🏋🏻‍♀️ 운동함
@@ -110,6 +114,7 @@
             <div id="quickAddFoods" style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;justify-content:center;"></div>
             <div class="buttons">
                 <button class="btn-save" onclick="saveMeals()">💾 저장</button>
+                <button class="btn" onclick="copyTodaySummary()" style="background:#f0f0f0;color:#667eea;width:100%;padding:10px;">📋 오늘 요약 복사</button>
             </div>
 
             <div id="backupToast" style="display:none; max-width:280px; margin:18px auto 0; background:#fff3cd; border:1px solid #ffe69c; color:#664d03; border-radius:10px; padding:10px 30px 10px 12px; font-size:12px; font-weight:600; position:relative; box-shadow:0 2px 8px rgba(0,0,0,0.12);">
@@ -125,7 +130,7 @@
         <div id="weekly" class="tab-content">
             <div id="weekTitle" style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:12px;"></div>
             <table class="table">
-                <thead><tr><th>날짜</th><th>칼로리</th><th>단백질</th></tr></thead>
+                <thead><tr><th>날짜</th><th>체중</th><th>칼로리</th><th>단백질</th></tr></thead>
                 <tbody id="weeklyTable"></tbody>
             </table>
             <canvas id="weeklyChart" style="margin-top: 20px; max-height: 300px;"></canvas>
@@ -428,6 +433,7 @@ async function load() {
     const snap = await getDoc(doc(db, 'caldata', currentDate));
     data = snap.exists() ? snap.data() : {
         exercise: false,
+        weight: '',
         meals: [
             { id: 1, name: '☀️ 아침', fixed: true, cal: '', pro: '', notes: [] },
             { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
@@ -440,6 +446,7 @@ async function load() {
 
 function render() {
     document.getElementById('exerciseCheck').checked = data.exercise || false;
+    document.getElementById('weightInput').value = data.weight || '';
     let html = '';
     data.meals.forEach((meal, idx) => {
         html += `<div class="meal">
@@ -483,13 +490,15 @@ function calc() {
     document.getElementById('calGoalDisplay').textContent = calGoal;
     document.getElementById('proGoalDisplay').textContent = proGoal;
     const calDiff = Math.round(c - calGoal);
+    const calPct = calGoal > 0 ? Math.round((c / calGoal) * 100) : 0;
     const calDiffEl = document.getElementById('calDiff');
     calDiffEl.className = 'stat-diff ' + (c < calGoal ? 'stat-green' : 'stat-red');
-    calDiffEl.textContent = (calDiff >= 0 ? '+' : '') + calDiff;
+    calDiffEl.textContent = (calDiff >= 0 ? '+' : '') + calDiff + ` (${calPct}%)`;
     const proDiff = Math.round((p - proGoal) * 10) / 10;
+    const proPct = proGoal > 0 ? Math.round((p / proGoal) * 100) : 0;
     const proDiffEl = document.getElementById('proDiff');
     proDiffEl.className = 'stat-diff ' + (p < proGoal ? 'stat-red' : 'stat-green');
-    proDiffEl.textContent = (proDiff >= 0 ? '+' : '') + proDiff;
+    proDiffEl.textContent = (proDiff >= 0 ? '+' : '') + proDiff + ` (${proPct}%)`;
 }
 
 // ── 전역 함수 노출 ───────────────────────────────────────────
@@ -520,10 +529,12 @@ window.delMeal = (id) => { data.meals = data.meals.filter(m => m.id !== id); ren
 window.moveUp = (idx) => { if (idx > 0 && !data.meals[idx].fixed) { [data.meals[idx], data.meals[idx-1]] = [data.meals[idx-1], data.meals[idx]]; render(); } };
 window.moveDown = (idx) => { if (idx < data.meals.length-1 && !data.meals[idx].fixed) { [data.meals[idx], data.meals[idx+1]] = [data.meals[idx+1], data.meals[idx]]; render(); } };
 window.updateExercise = () => { data.exercise = document.getElementById('exerciseCheck').checked; calc(); };
+window.updateWeight = () => { data.weight = parseFloat(document.getElementById('weightInput').value) || ''; };
 window.calc = calc;
 
 window.saveMeals = async () => {
     data.exercise = document.getElementById('exerciseCheck').checked;
+    data.weight = parseFloat(document.getElementById('weightInput').value) || '';
     data.meals.forEach(meal => {
         meal.cal = parseFloat(document.getElementById('cal_' + meal.id)?.value) || 0;
         meal.pro = parseFloat(document.getElementById('pro_' + meal.id)?.value) || 0;
@@ -535,6 +546,51 @@ window.saveMeals = async () => {
     setSyncStatus('저장됨 ✅');
     setTimeout(() => setSyncStatus('Firebase 연결됨'), 2000);
     refreshFoodHistory(); // 방금 저장한 내용도 자동완성 이력에 바로 반영
+};
+
+window.copyTodaySummary = async () => {
+    const weight = document.getElementById('weightInput').value;
+    const exercise = document.getElementById('exerciseCheck').checked;
+    const totalCal = document.getElementById('totalCal').textContent;
+    const totalPro = document.getElementById('totalPro').textContent;
+    const calGoal = document.getElementById('calGoalDisplay').textContent;
+    const proGoal = document.getElementById('proGoalDisplay').textContent;
+    const lines = [];
+    lines.push(`📅 ${currentDate}`);
+    lines.push(`⚖️ 체중: ${weight ? weight + 'kg' : '-'}`);
+    lines.push(`🏋🏻‍♀️ 운동: ${exercise ? 'O' : 'X'}`);
+    lines.push('');
+    data.meals.forEach(meal => {
+        const calEl = document.getElementById('cal_' + meal.id);
+        const proEl = document.getElementById('pro_' + meal.id);
+        const cal = calEl ? (parseFloat(calEl.value) || 0) : 0;
+        const pro = proEl ? (parseFloat(proEl.value) || 0) : 0;
+        lines.push(`${meal.name}: ${cal}kcal / ${pro}g`);
+    });
+    const calPct = parseFloat(calGoal) > 0 ? Math.round((parseFloat(totalCal) / parseFloat(calGoal)) * 100) : 0;
+    const proPct = parseFloat(proGoal) > 0 ? Math.round((parseFloat(totalPro) / parseFloat(proGoal)) * 100) : 0;
+    lines.push('');
+    lines.push(`총합: ${totalCal}kcal / ${totalPro}g`);
+    lines.push(`목표: ${calGoal}kcal (${calPct}%) / ${proGoal}g (${proPct}%)`);
+    const text = lines.join('\n');
+    try {
+        await navigator.clipboard.writeText(text);
+        alert('📋 요약이 클립보드에 복사됐어요!');
+    } catch (e) {
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.focus(); ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            alert('📋 요약이 클립보드에 복사됐어요!');
+        } catch (e2) {
+            alert('❌ 복사에 실패했어요. 직접 선택해서 복사해주세요:\n\n' + text);
+        }
+    }
 };
 
 window.prevDay = async () => { currentDate = shiftDate(currentDate, -1); await load(); };
@@ -616,7 +672,7 @@ async function renderWeek() {
     document.getElementById('weekTitle').innerHTML = `<button onclick="prevWeek()" class="btn" style="background:#f0f0f0;color:#667eea;padding:4px 14px;font-size:16px;">‹</button><span style="font-weight:bold;">${mon.getMonth()+1}/${mon.getDate()} ~ ${sun.getMonth()+1}/${sun.getDate()}</span><button onclick="nextWeek()" class="btn" style="background:#f0f0f0;color:#667eea;padding:4px 14px;font-size:16px;">›</button>`;
     const dayData = await fetchDateRange(dates);
     const days = ['월','화','수','목','금','토','일'];
-    let html = ''; const calData=[], proData=[], labels=[];
+    let html = ''; const calData=[], proData=[], weightData=[], labels=[];
     dates.forEach((dateStr, i) => {
         const s = dayData[dateStr]; let c=0,p=0;
         if (s.meals) s.meals.forEach(m => { c+=m.cal||0; p+=m.pro||0; });
@@ -624,17 +680,21 @@ async function renderWeek() {
         const dayName = days[dObj.getDay()===0?6:dObj.getDay()-1];
         labels.push(`${dObj.getMonth()+1}/${dObj.getDate()} ${dayName}${s.exercise ? ' 🏋🏻‍♀️' : ''}`);
         calData.push(c); proData.push(p);
-        html += `<tr><td>${dayName} ${s.exercise?'🏋🏻‍♀️':''}</td><td>${Math.round(c)}</td><td>${p.toFixed(1)}</td></tr>`;
+        if (typeof s.weight === 'number' && s.weight > 0) weightData.push(s.weight);
+        html += `<tr><td>${dayName} ${s.exercise?'🏋🏻‍♀️':''}</td><td>${typeof s.weight === 'number' && s.weight > 0 ? s.weight.toFixed(1) : '-'}</td><td>${Math.round(c)}</td><td>${p.toFixed(1)}</td></tr>`;
     });
     const avgCal = calData.reduce((a,b)=>a+b,0) / calData.length;
     const avgPro = proData.reduce((a,b)=>a+b,0) / proData.length;
+    const avgWeight = weightData.length ? weightData.reduce((a,b)=>a+b,0) / weightData.length : null;
     const calDiff = Math.round(avgCal - BASE_CAL_GOAL);
     const proDiff = Math.round((avgPro - BASE_PRO_GOAL) * 10) / 10;
+    const calPct = Math.round((avgCal / BASE_CAL_GOAL) * 100);
+    const proPct = Math.round((avgPro / BASE_PRO_GOAL) * 100);
     const calDiffColor = calDiff <= 0 ? '#4ade80' : '#ef4444';
     const proDiffColor = proDiff < 0 ? '#ef4444' : '#4ade80';
-    const calDiffStr = (calDiff >= 0 ? '+' : '') + calDiff;
-    const proDiffStr = (proDiff >= 0 ? '+' : '') + proDiff;
-    html += `<tr style="background:#f7f8fc;font-weight:700;border-top:2px solid #667eea;"><td>평균</td><td style="color:#f87171;">${Math.round(avgCal)} <span style="font-size:10px;color:${calDiffColor};">(${calDiffStr})</span></td><td style="color:#60a5fa;">${avgPro.toFixed(1)} <span style="font-size:10px;color:${proDiffColor};">(${proDiffStr})</span></td></tr>`;
+    const calDiffStr = (calDiff >= 0 ? '+' : '') + calDiff + ` (${calPct}%)`;
+    const proDiffStr = (proDiff >= 0 ? '+' : '') + proDiff + ` (${proPct}%)`;
+    html += `<tr style="background:#f7f8fc;font-weight:700;border-top:2px solid #667eea;"><td>평균</td><td>${avgWeight !== null ? avgWeight.toFixed(1) : '-'}</td><td style="color:#f87171;">${Math.round(avgCal)} <span style="font-size:10px;color:${calDiffColor};">(${calDiffStr})</span></td><td style="color:#60a5fa;">${avgPro.toFixed(1)} <span style="font-size:10px;color:${proDiffColor};">(${proDiffStr})</span></td></tr>`;
     document.getElementById('weeklyTable').innerHTML = html;
     // 입력값에 따라 y축 최댓값 자동 조정 (목표선 + 여유 10%)
     const calMax = Math.max(2200, Math.ceil(Math.max(...calData, BASE_CAL_GOAL) * 1.1 / 100) * 100);
@@ -695,10 +755,12 @@ async function loadMonthlyCalendar() {
         const s = dayData[dateStr]||{meals:[]}; let c=0,p=0;
         if (s.meals) s.meals.forEach(m=>{c+=m.cal||0;p+=m.pro||0;});
         const exBg = s.exercise ? 'background:rgba(102,126,234,0.09);border:1px solid rgba(102,126,234,0.25);' : 'border:1px solid #e0e0e0;';
+        const hasWeight = typeof s.weight === 'number' && s.weight > 0;
         html += `<div style="${exBg}border-radius:8px;padding:8px;min-height:80px;font-size:11px;">
             <div style="font-weight:600;margin-bottom:4px;">${day}${s.exercise ? ' <span style="font-size:10px;">🏋🏻‍♀️</span>' : ''}</div>
             <div style="color:#f87171;font-weight:600;">${c>0?Math.round(c):''}</div>
             <div style="color:#60a5fa;font-weight:600;">${p>0?p.toFixed(1)+'g':''}</div>
+            <div style="color:#888;font-weight:600;">${hasWeight?s.weight.toFixed(1)+'kg':''}</div>
         </div>`;
     }
     html += '</div>';
@@ -751,7 +813,7 @@ async function init() {
     // 미리보기/제한된 네트워크에서 Firebase 연결이 지연돼도 화면은 뜨도록 안전장치 (4초)
     const safety = setTimeout(() => {
         if (!data.meals) {
-            data = { exercise: false, meals: [
+            data = { exercise: false, weight: '', meals: [
                 { id: 1, name: '☀️ 아침', fixed: true, cal: '', pro: '', notes: [] },
                 { id: 2, name: '🌤️ 점심', fixed: true, cal: '', pro: '', notes: [] },
                 { id: 3, name: '🌙 저녁', fixed: true, cal: '', pro: '', notes: [] }
